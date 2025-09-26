@@ -19,6 +19,7 @@ export interface ChecklistAnswer {
   questionId: string;
   response: "ok" | "nc" | "na";
   photoUrl?: string;
+  observation?: string;
 }
 
 export type NonConformityStatus = "open" | "in_progress" | "resolved";

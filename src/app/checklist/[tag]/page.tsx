@@ -30,7 +30,13 @@ type CachedUser = {
   nome: string;
 };
 
-type AnswerMap = Record<string, ChecklistAnswer>;
+type AnswerDraft = {
+  questionId: string;
+  response?: "ok" | "nc" | "na";
+  observation?: string;
+};
+
+type AnswerMap = Record<string, AnswerDraft>;
 type PhotoMap = Record<string, File | null>;
 
 type UserLookup = {
@@ -191,11 +197,37 @@ export default function ChecklistByTagPage() {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
+  useEffect(() => {
+    setAnswers({});
+    setPhotos({});
+  }, [selectedTemplateId]);
+
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: { questionId, response: value },
-    }));
+    setAnswers((prev) => {
+      const current = prev[questionId] ?? { questionId };
+      return {
+        ...prev,
+        [questionId]: {
+          ...current,
+          questionId,
+          response: value,
+        },
+      };
+    });
+  };
+
+  const setObservation = (questionId: string, value: string) => {
+    setAnswers((prev) => {
+      const current = prev[questionId] ?? { questionId };
+      return {
+        ...prev,
+        [questionId]: {
+          ...current,
+          questionId,
+          observation: value,
+        },
+      };
+    });
   };
 
   const onPhotoChange = (questionId: string, file: File | null) => {
@@ -255,6 +287,10 @@ export default function ChecklistByTagPage() {
       const uploadedAnswers: ChecklistAnswer[] = [];
       for (const question of currentTemplate.questions) {
         const base = answers[question.id];
+        if (!base || !base.response) {
+          continue;
+        }
+
         let photoUrl: string | undefined = undefined;
         const file = photos[question.id] || null;
 
@@ -272,6 +308,11 @@ export default function ChecklistByTagPage() {
 
         if (photoUrl !== undefined) {
           answer.photoUrl = photoUrl;
+        }
+
+        const observationText = base.observation?.trim();
+        if (observationText) {
+          answer.observation = observationText;
         }
 
         uploadedAnswers.push(answer);
@@ -429,39 +470,58 @@ export default function ChecklistByTagPage() {
           {currentTemplate ? (
             <div className="space-y-4">
               {currentTemplate.questions.map((question, index) => (
-                <div key={question.id} className="p-3 bg-gray-900 rounded-lg border border-gray-700">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium">
-                        {index + 1}. {question.text}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                        {(["ok", "nc", "na"] as const).map((value) => (
-                          <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name={`q-${question.id}`}
-                              value={value}
-                              onChange={() => setResponse(question.id, value)}
-                              className="accent-blue-500"
-                            />
-                            <span className="uppercase">{value}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="min-w-40">
-                      <label className="text-xs text-gray-400">
-                        Foto {question.requiresPhoto ? "(obrigatoria para NC)" : "(opcional)"}
+                <div
+                  key={question.id}
+                  className="space-y-3 rounded-lg border border-gray-700 bg-gray-900 p-3"
+                >
+                  <p className="font-medium">
+                    {index + 1}. {question.text}
+                  </p>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    {(["ok", "nc", "na"] as const).map((value) => (
+                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name={`q-${question.id}`}
+                          value={value}
+                          checked={answers[question.id]?.response === value}
+                          onChange={() => setResponse(question.id, value)}
+                          className="accent-blue-500"
+                        />
+                        <span className="uppercase">{value}</span>
                       </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
-                        className="block w-full text-xs mt-1 file:mr-3 file:py-1 file:px-2 file:rounded-md file:border-0 file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-                      />
-                    </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-300">Observações</label>
+                    <textarea
+                      value={answers[question.id]?.observation ?? ""}
+                      onChange={(event) => setObservation(question.id, event.target.value)}
+                      rows={3}
+                      placeholder="Registre detalhes importantes, evidências ou observações adicionais"
+                      className={[
+                        "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
+                        "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
+                      ].join(" ")}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-400">
+                      Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
+                      className={[
+                        "mt-1 block w-full text-xs",
+                        "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
+                        "hover:file:bg-gray-600",
+                      ].join(" ")}
+                    />
                   </div>
                 </div>
               ))}

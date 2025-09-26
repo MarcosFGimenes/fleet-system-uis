@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
 import {
   collection,
+  deleteDoc,
+  doc,
   getDocs,
   orderBy,
   query,
@@ -13,6 +15,7 @@ import {
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
+import { saveChecklistPdf, saveMultipleChecklistsPdf } from "@/lib/pdf";
 
 type FilterState = {
   machineId: string | "all";
@@ -38,6 +41,8 @@ export default function ResponsesAdminPage() {
     hasNC: "all",
   });
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [periodExporting, setPeriodExporting] = useState(false);
+  const [periodDeleting, setPeriodDeleting] = useState(false);
 
   const machinesCol = useMemo(() => collection(db, "machines"), []);
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
@@ -152,6 +157,83 @@ export default function ResponsesAdminPage() {
     await fetchRows();
   };
 
+  const handleExportSingle = (row: Row) => {
+    try {
+      saveChecklistPdf(
+        { response: row, machine: row.machine, template: row.template },
+        `checklist-${row.id}`,
+      );
+    } catch (error) {
+      console.error("Erro ao exportar checklist", error);
+      alert("Não foi possível exportar o PDF deste checklist.");
+    }
+  };
+
+  const handleExportPeriod = async () => {
+    if (!filter.from || !filter.to) {
+      alert("Informe a data inicial e final para exportar o período.");
+      return;
+    }
+
+    if (rows.length === 0) {
+      alert("Nenhum checklist encontrado para o período selecionado.");
+      return;
+    }
+
+    setPeriodExporting(true);
+    try {
+      saveMultipleChecklistsPdf(
+        rows.map((row) => ({
+          response: row,
+          machine: row.machine,
+          template: row.template,
+        })),
+        {
+          periodLabel: { from: filter.from, to: filter.to },
+          filename: `checklists-${filter.from}-a-${filter.to}`,
+        },
+      );
+    } catch (error) {
+      console.error("Erro ao exportar checklists", error);
+      alert("Não foi possível exportar os checklists deste período.");
+    } finally {
+      setPeriodExporting(false);
+    }
+  };
+
+  const handleDeletePeriod = async () => {
+    if (!filter.from || !filter.to) {
+      alert("Informe a data inicial e final para excluir checklists do período.");
+      return;
+    }
+
+    if (rows.length === 0) {
+      alert("Nenhum checklist encontrado para o período selecionado.");
+      return;
+    }
+
+    const confirmation = confirm(
+      `Deseja realmente deletar ${rows.length} checklist(s) entre ${filter.from} e ${filter.to}? Esta ação não pode ser desfeita.`,
+    );
+    if (!confirmation) {
+      return;
+    }
+
+    setPeriodDeleting(true);
+    try {
+      for (const row of rows) {
+        await deleteDoc(doc(db, "checklistResponses", row.id));
+      }
+      alert(`Checklists deletados com sucesso (${rows.length}).`);
+      await fetchRows();
+    } catch (error) {
+      console.error("Erro ao deletar checklists", error);
+      alert("Não foi possível deletar os checklists deste período. Tente novamente.");
+    } finally {
+      setPeriodDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <header className="flex items-center justify-between">
@@ -222,12 +304,29 @@ export default function ResponsesAdminPage() {
           </div>
         </div>
 
-        <div className="mt-3 flex justify-end">
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleExportPeriod}
+              disabled={periodExporting || loading || rows.length === 0}
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {periodExporting ? "Exportando..." : "Exportar período (PDF)"}
+            </button>
+            <button
+              onClick={handleDeletePeriod}
+              disabled={periodDeleting || loading || rows.length === 0}
+              className="rounded-md border border-red-600 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {periodDeleting ? "Excluindo..." : "Excluir período"}
+            </button>
+          </div>
           <button
             onClick={applyFilters}
-            className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700"
+            disabled={loading}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Aplicar Filtros
+            {loading ? "Carregando..." : "Aplicar Filtros"}
           </button>
         </div>
       </section>
@@ -305,10 +404,17 @@ export default function ResponsesAdminPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleExportSingle(row)}
+                          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-blue-500"
+                        >
+                          PDF
+                        </button>
                         <a
                           href={`/responses/${row.id}`}
-                          className="px-3 py-1 rounded-md bg-gray-700 hover:bg-gray-600"
+                          className="rounded-md bg-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-gray-600"
                         >
                           Ver
                         </a>

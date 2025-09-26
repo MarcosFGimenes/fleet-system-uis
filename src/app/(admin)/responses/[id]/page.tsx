@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
+import { saveChecklistPdf } from "@/lib/pdf";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { Machine } from "@/types/machine";
 import {
@@ -213,22 +214,46 @@ export default function ResponseDetailPage() {
 
   const statusOrder: NonConformityStatus[] = ["open", "in_progress", "resolved"];
 
+  const handleExportPdf = () => {
+    try {
+      saveChecklistPdf(
+        {
+          response,
+          machine: machine ?? undefined,
+          template: template ?? undefined,
+        },
+        `checklist-${response.id}`,
+      );
+    } catch (error) {
+      console.error("Erro ao exportar checklist", error);
+      alert("Não foi possível exportar o PDF deste checklist.");
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6 px-4 sm:px-0">
       <header className="space-y-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Detalhes do Checklist</h1>
             <p className="text-sm text-gray-400">
               Enviado em {new Date(response.createdAt).toLocaleString()}
             </p>
           </div>
-          <button
-            onClick={() => router.back()}
-            className="self-start rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-gray-500 hover:bg-gray-800"
-          >
-            Voltar
-          </button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <button
+              onClick={() => router.back()}
+              className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-gray-500 hover:bg-gray-800"
+            >
+              Voltar
+            </button>
+            <button
+              onClick={handleExportPdf}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+            >
+              Exportar PDF
+            </button>
+          </div>
         </div>
       </header>
 
@@ -320,6 +345,11 @@ export default function ResponseDetailPage() {
                       <span className="mt-1 inline-flex items-center rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                         NC identificado
                       </span>
+                      {answer.observation && (
+                        <p className="mt-3 text-sm text-gray-200">
+                          Observações do operador: <span className="text-gray-300">{answer.observation}</span>
+                        </p>
+                      )}
                     </div>
                     {answer.photoUrl && (
                       <a
@@ -442,6 +472,9 @@ export default function ResponseDetailPage() {
                       ? "Conforme"
                       : "Não se aplica"}
                   </span>
+                  {answer.observation && (
+                    <p className="text-sm text-gray-300">Observações: {answer.observation}</p>
+                  )}
                 </div>
                 {answer.photoUrl && (
                   <a
