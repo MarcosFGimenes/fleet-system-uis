@@ -238,7 +238,7 @@ export default function ResponsesAdminPage() {
             <thead className="bg-gray-700">
               <tr>
                 <th className="text-left px-4 py-3">Data</th>
-                <th className="text-left px-4 py-3">Maquina</th>
+                <th className="text-left px-4 py-3">Máquina</th>
                 <th className="text-left px-4 py-3">Template</th>
                 <th className="text-left px-4 py-3">KM/Hor</th>
                 <th className="text-left px-4 py-3">NC</th>
@@ -268,8 +268,11 @@ export default function ResponsesAdminPage() {
                       {new Date(row.createdAt).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
-                      {row.machine?.modelo ?? row.machineId}
-                      <div className="text-xs text-gray-400">TAG: {row.machine?.tag ?? "-"}</div>
+                      <div className="font-medium">{row.machine?.modelo ?? row.machineId}</div>
+                      <div className="mt-1 space-y-0.5 text-xs text-gray-400">
+                        <p>TAG: {row.machine?.tag ?? "-"}</p>
+                        <p>Placa: {row.machine?.placa ?? "-"}</p>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       {row.template?.title ?? row.templateId}
