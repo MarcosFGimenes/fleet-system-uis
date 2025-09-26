@@ -68,7 +68,7 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
     const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
     ensureSpace(lines.length);
     doc.setFont("helvetica", bold ? "bold" : "normal");
-    lines.forEach((line: string) => {
+    lines.forEach((line) => {
       doc.text(line, margin, y);
       y += lineHeight;
     });
