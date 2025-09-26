@@ -182,6 +182,14 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
       addParagraph(`Foto: ${answer.photoUrl}`);
     }
 
+    if (answer.recurrence) {
+      const recurrenceLabel =
+        answer.recurrence.status === "still_nc"
+          ? "Permanece em não conformidade"
+          : "Operador informou que a não conformidade foi resolvida";
+      addParagraph(`Reincidência: ${recurrenceLabel}`);
+    }
+
     addParagraph("", { spacing: 2 });
   });
 };

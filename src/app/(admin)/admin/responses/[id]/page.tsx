@@ -342,6 +342,21 @@ export default function ResponseDetailPage() {
                       <span className="mt-1 inline-flex items-center rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                         NC identificado
                       </span>
+                      {answer.recurrence && (
+                        <span
+                          className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
+                            answer.recurrence.status === "still_nc"
+                              ? "bg-amber-400 text-black"
+                              : "bg-emerald-600 text-white"
+                          }`}
+                        >
+                          Reincidência ·
+                          {" "}
+                          {answer.recurrence.status === "still_nc"
+                            ? "Permanece em NC"
+                            : "Informada como resolvida"}
+                        </span>
+                      )}
                       {answer.observation && (
                         <p className="mt-3 text-sm text-gray-200">
                           Observações do operador: <span className="text-gray-300">{answer.observation}</span>

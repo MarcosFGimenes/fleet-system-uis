@@ -15,11 +15,20 @@ export interface ChecklistTemplate {
   questions: ChecklistQuestion[];
 }
 
+export type ChecklistRecurrenceStatus = "resolved" | "still_nc";
+
+export interface ChecklistAnswerRecurrence {
+  previousResponseId: string;
+  status: ChecklistRecurrenceStatus;
+  notedAt: string;
+}
+
 export interface ChecklistAnswer {
   questionId: string;
   response: "ok" | "nc" | "na";
   photoUrl?: string;
   observation?: string;
+  recurrence?: ChecklistAnswerRecurrence;
 }
 
 export type NonConformityStatus = "open" | "in_progress" | "resolved";
