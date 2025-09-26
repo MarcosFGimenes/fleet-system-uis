@@ -15,7 +15,7 @@ import {
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
-import { saveChecklistPdf, saveMultipleChecklistsPdf } from "@/lib/pdf";
+import { downloadChecklistsZip, saveChecklistPdf } from "@/lib/pdf";
 
 type FilterState = {
   machineId: string | "all";
@@ -159,10 +159,7 @@ export default function ResponsesAdminPage() {
 
   const handleExportSingle = (row: Row) => {
     try {
-      saveChecklistPdf(
-        { response: row, machine: row.machine, template: row.template },
-        `checklist-${row.id}`,
-      );
+      saveChecklistPdf({ response: row, machine: row.machine, template: row.template });
     } catch (error) {
       console.error("Erro ao exportar checklist", error);
       alert("Não foi possível exportar o PDF deste checklist.");
@@ -182,14 +179,13 @@ export default function ResponsesAdminPage() {
 
     setPeriodExporting(true);
     try {
-      saveMultipleChecklistsPdf(
+      await downloadChecklistsZip(
         rows.map((row) => ({
           response: row,
           machine: row.machine,
           template: row.template,
         })),
         {
-          periodLabel: { from: filter.from, to: filter.to },
           filename: `checklists-${filter.from}-a-${filter.to}`,
         },
       );
