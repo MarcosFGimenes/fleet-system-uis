@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@lib/firebase";
-import { Machine } from "@types/machine";
+import type { Machine } from "@/types/machine";
 
 export default function MachinesPublicPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
