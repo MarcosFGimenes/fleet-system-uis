@@ -31,10 +31,8 @@ export default function ResponseDetailPage() {
         if (!responseSnap.exists()) {
           throw new Error("Checklist não encontrado.");
         }
-        const responseData = {
-          id: responseSnap.id,
-          ...(responseSnap.data() as ChecklistResponse),
-        } as ChecklistResponse;
+        const responseRaw = responseSnap.data() as Omit<ChecklistResponse, "id">;
+        const responseData: ChecklistResponse = { id: responseSnap.id, ...responseRaw };
         setResponse(responseData);
 
         const [machineSnap, templateSnap] = await Promise.all([
@@ -165,3 +163,5 @@ export default function ResponseDetailPage() {
     </div>
   );
 }
+
+
