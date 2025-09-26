@@ -216,14 +216,11 @@ export default function ResponseDetailPage() {
 
   const handleExportPdf = () => {
     try {
-      saveChecklistPdf(
-        {
-          response,
-          machine: machine ?? undefined,
-          template: template ?? undefined,
-        },
-        `checklist-${response.id}`,
-      );
+      saveChecklistPdf({
+        response,
+        machine: machine ?? undefined,
+        template: template ?? undefined,
+      });
     } catch (error) {
       console.error("Erro ao exportar checklist", error);
       alert("Não foi possível exportar o PDF deste checklist.");

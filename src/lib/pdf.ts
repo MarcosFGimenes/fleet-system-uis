@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import JSZip from "jszip";
 import { ChecklistAnswer, ChecklistResponse, ChecklistTemplate } from "@/types/checklist";
 import { Machine } from "@/types/machine";
 
@@ -6,8 +7,6 @@ const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
   timeStyle: "short",
 });
-
-const dateFormatter = new Intl.DateTimeFormat("pt-BR");
 
 type ChecklistPdfDetail = {
   response: ChecklistResponse;
@@ -26,10 +25,50 @@ type AppendOptions = {
 
 const sanitizeFilename = (value: string) =>
   value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "")
+    .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
-    .replace(/(^-|-$)/g, "");
+    .replace(/(^\.|\.$)/g, "")
+    .trim();
+
+const sanitizeComponent = (value: string) =>
+  sanitizeFilename(value)
+    .replace(/^-+/, "")
+    .replace(/-+$/, "");
+
+const formatResponseDate = (response: ChecklistResponse) => {
+  const parsed = new Date(response.createdAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return response.createdAt.slice(0, 10);
+  }
+  return parsed.toISOString().slice(0, 10);
+};
+
+const buildChecklistDocumentBaseName = (detail: ChecklistPdfDetail, explicitName?: string) => {
+  if (explicitName) {
+    return sanitizeFilename(explicitName);
+  }
+
+  const plateSource = detail.machine?.placa ?? detail.machine?.tag ?? detail.response.machineId;
+  const plate = plateSource ? sanitizeComponent(plateSource).toUpperCase() : "CHECKLIST";
+  const dateLabel = formatResponseDate(detail.response);
+
+  return `(${plate})-${dateLabel}`;
+};
+
+const triggerDownload = (blob: Blob, filename: string) => {
+  const safeName = sanitizeFilename(filename) || "download";
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = safeName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 const formatAnswerResponse = (answer: ChecklistAnswer) => {
   switch (answer.response) {
@@ -155,70 +194,35 @@ export const buildChecklistPdf = (detail: ChecklistPdfDetail) => {
 
 export const saveChecklistPdf = (detail: ChecklistPdfDetail, filename?: string) => {
   const doc = buildChecklistPdf(detail);
-  const baseName = filename
-    ? sanitizeFilename(filename)
-    : `checklist-${sanitizeFilename(detail.response.id)}-${detail.response.createdAt.slice(0, 10)}`;
+  const baseName = buildChecklistDocumentBaseName(detail, filename);
   doc.save(`${baseName}.pdf`);
 };
 
-type MultipleChecklistOptions = {
+type ZipOptions = {
   filename?: string;
-  periodLabel?: { from?: string; to?: string };
 };
 
-export const saveMultipleChecklistsPdf = (
+export const downloadChecklistsZip = async (
   details: ChecklistPdfDetail[],
-  options: MultipleChecklistOptions = {},
+  options: ZipOptions = {},
 ) => {
   if (details.length === 0) {
     return;
   }
 
-  const doc = new jsPDF();
-  const { periodLabel } = options;
+  const zip = new JSZip();
 
-  details.forEach((detail, index) => {
-    const preface: Preface | undefined =
-      index === 0 && periodLabel
-        ? {
-            title: "Relatório de Checklists",
-            subtitle: buildPeriodLabel(periodLabel),
-          }
-        : undefined;
-
-    if (index > 0) {
-      doc.addPage();
-    }
-
-    appendChecklistToDoc(doc, detail, { preface });
+  details.forEach((detail) => {
+    const doc = buildChecklistPdf(detail);
+    const pdfData = doc.output("arraybuffer");
+    const filename = `${buildChecklistDocumentBaseName(detail)}.pdf`;
+    zip.file(filename, pdfData);
   });
 
-  const baseName = options.filename
-    ? sanitizeFilename(options.filename)
-    : `checklists-${details.length}-${details[0].response.createdAt.slice(0, 10)}`;
-
-  doc.save(`${baseName}.pdf`);
-};
-
-const buildPeriodLabel = (period?: { from?: string; to?: string }) => {
-  if (!period) {
-    return undefined;
-  }
-
-  const fromLabel = period.from ? dateFormatter.format(new Date(`${period.from}T00:00:00`)) : null;
-  const toLabel = period.to ? dateFormatter.format(new Date(`${period.to}T00:00:00`)) : null;
-
-  if (fromLabel && toLabel) {
-    return `Período: ${fromLabel} a ${toLabel}`;
-  }
-
-  if (fromLabel) {
-    return `Período iniciado em ${fromLabel}`;
-  }
-
-  if (toLabel) {
-    return `Período até ${toLabel}`;
-  }
-
-  return undefined;
+  const baseName = buildChecklistDocumentBaseName(
+    details[0],
+    options.filename ?? `checklists-${details.length}-${formatResponseDate(details[0].response)}`,
+  );
+  const blob = await zip.generateAsync({ type: "blob" });
+  triggerDownload(blob, `${baseName}.zip`);
 };
