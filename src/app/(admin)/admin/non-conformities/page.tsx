@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
 import {
+  ChecklistRecurrenceStatus,
   ChecklistNonConformityTreatment,
   ChecklistResponse,
   ChecklistTemplate,
@@ -39,6 +40,8 @@ type PendingItem = {
   observation?: string;
   operatorNome?: string | null;
   operatorMatricula?: string;
+  isRecurrence: boolean;
+  recurrenceStatus?: ChecklistRecurrenceStatus;
 };
 
 type FeedbackState = {
@@ -125,6 +128,7 @@ export default function NonConformitiesAdminPage() {
 
           const treatment = treatmentByQuestion.get(answer.questionId);
           const statusValue = treatment?.status ?? "open";
+          const recurrenceInfo = answer.recurrence;
 
           pendingItems.push({
             id: `${response.id}-${answer.questionId}`,
@@ -145,6 +149,8 @@ export default function NonConformitiesAdminPage() {
             observation: answer.observation,
             operatorNome: response.operatorNome ?? null,
             operatorMatricula: response.operatorMatricula,
+            isRecurrence: Boolean(recurrenceInfo),
+            recurrenceStatus: recurrenceInfo?.status,
           });
         }
       }
@@ -399,6 +405,21 @@ export default function NonConformitiesAdminPage() {
                   >
                     {statusLabel[item.draftStatus]}
                   </span>
+                  {item.isRecurrence && (
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        item.recurrenceStatus === "still_nc"
+                          ? "bg-amber-400 text-black"
+                          : "bg-emerald-600 text-white"
+                      }`}
+                    >
+                      Reincidência ·
+                      {" "}
+                      {item.recurrenceStatus === "still_nc"
+                        ? "Permanece em NC"
+                        : "Informada como resolvida"}
+                    </span>
+                  )}
                   <a
                     href={`/responses/${item.responseId}`}
                     className="rounded-md border border-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-gray-500 hover:bg-gray-800"

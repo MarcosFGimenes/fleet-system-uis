@@ -8,6 +8,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
   where,
@@ -15,7 +17,12 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { Machine } from "@/types/machine";
-import { ChecklistAnswer, ChecklistTemplate } from "@/types/checklist";
+import type {
+  ChecklistAnswer,
+  ChecklistRecurrenceStatus,
+  ChecklistResponse,
+  ChecklistTemplate,
+} from "@/types/checklist";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type LookupState = "idle" | "searching" | "found" | "not_found" | "error";
@@ -38,6 +45,13 @@ type AnswerDraft = {
 
 type AnswerMap = Record<string, AnswerDraft>;
 type PhotoMap = Record<string, File | null>;
+
+type PreviousResponseMeta = {
+  id: string;
+  createdAt?: string | null;
+};
+
+type PreviousNcMap = Record<string, ChecklistAnswer>;
 
 type UserLookup = {
   state: LookupState;
@@ -65,6 +79,15 @@ export default function ChecklistByTagPage() {
 
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [photos, setPhotos] = useState<PhotoMap>({});
+
+  const [previousResponseMeta, setPreviousResponseMeta] =
+    useState<PreviousResponseMeta | null>(null);
+  const [previousNcMap, setPreviousNcMap] = useState<PreviousNcMap>({});
+  const [previousLoading, setPreviousLoading] = useState(false);
+  const [previousError, setPreviousError] = useState<string | null>(null);
+  const [recurrenceDecisions, setRecurrenceDecisions] = useState<
+    Record<string, ChecklistRecurrenceStatus | undefined>
+  >({});
 
   const [userLookup, setUserLookup] = useState<UserLookup>(initialLookup);
   const [userInfo, setUserInfo] = useState<CachedUser | null>(null);
@@ -198,8 +221,88 @@ export default function ChecklistByTagPage() {
   }, [templates, selectedTemplateId]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchPrevious = async () => {
+      if (!machine || !currentTemplate) {
+        if (!cancelled) {
+          setPreviousLoading(false);
+          setPreviousResponseMeta(null);
+          setPreviousNcMap({});
+          setPreviousError(null);
+        }
+        return;
+      }
+
+      try {
+        setPreviousLoading(true);
+        setPreviousError(null);
+
+        const previousQuery = query(
+          responsesCol,
+          where("machineId", "==", machine.id),
+          where("templateId", "==", currentTemplate.id),
+          orderBy("createdAt", "desc"),
+          limit(1),
+        );
+
+        const previousSnap = await getDocs(previousQuery);
+        if (cancelled) {
+          return;
+        }
+
+        if (previousSnap.empty) {
+          setPreviousResponseMeta(null);
+          setPreviousNcMap({});
+          setPreviousLoading(false);
+          return;
+        }
+
+        const docSnap = previousSnap.docs[0];
+        const data = docSnap.data() as Omit<ChecklistResponse, "id">;
+        const meta: PreviousResponseMeta = {
+          id: docSnap.id,
+          createdAt: data.createdAt ?? null,
+        };
+
+        const ncMap: PreviousNcMap = {};
+        for (const answer of data.answers ?? []) {
+          if (answer?.response === "nc") {
+            ncMap[answer.questionId] = answer as ChecklistAnswer;
+          }
+        }
+
+        setPreviousResponseMeta(meta);
+        setPreviousNcMap(ncMap);
+        setRecurrenceDecisions({});
+      } catch (error) {
+        console.error("Erro ao carregar checklist anterior", error);
+        if (!cancelled) {
+          setPreviousResponseMeta(null);
+          setPreviousNcMap({});
+          setPreviousError("Não foi possível verificar o checklist anterior deste equipamento.");
+        }
+      } finally {
+        if (!cancelled) {
+          setPreviousLoading(false);
+        }
+      }
+    };
+
+    void fetchPrevious();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [machine, currentTemplate, responsesCol]);
+
+  useEffect(() => {
     setAnswers({});
     setPhotos({});
+    setRecurrenceDecisions({});
+    setPreviousNcMap({});
+    setPreviousResponseMeta(null);
+    setPreviousError(null);
   }, [selectedTemplateId]);
 
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
@@ -230,6 +333,16 @@ export default function ChecklistByTagPage() {
     });
   };
 
+  const setRecurrenceDecision = (
+    questionId: string,
+    status: ChecklistRecurrenceStatus,
+  ) => {
+    setRecurrenceDecisions((prev) => ({
+      ...prev,
+      [questionId]: status,
+    }));
+  };
+
   const onPhotoChange = (questionId: string, file: File | null) => {
     setPhotos((prev) => ({
       ...prev,
@@ -258,6 +371,26 @@ export default function ChecklistByTagPage() {
 
     try {
       const { userId, nome: nomeResolved } = await validateUser();
+
+      const previousNcIds = Object.keys(previousNcMap);
+      if (previousNcIds.length && previousResponseMeta) {
+        const unansweredRecurrence = previousNcIds.filter(
+          (questionId) => previousNcMap[questionId] && !recurrenceDecisions[questionId],
+        );
+
+        if (unansweredRecurrence.length) {
+          const missingQuestions = unansweredRecurrence
+            .map((questionId) =>
+              currentTemplate.questions.find((question) => question.id === questionId)?.text || questionId,
+            )
+            .join(", ");
+
+          alert(
+            `Informe se as não conformidades anteriores foram resolvidas para: ${missingQuestions}.`,
+          );
+          return;
+        }
+      }
 
       const missing = currentTemplate.questions.filter(
         (question) => !answers[question.id]?.response
@@ -313,6 +446,17 @@ export default function ChecklistByTagPage() {
         const observationText = base.observation?.trim();
         if (observationText) {
           answer.observation = observationText;
+        }
+
+        if (previousResponseMeta && previousNcMap[question.id]) {
+          const recurrenceStatus = recurrenceDecisions[question.id];
+          if (recurrenceStatus) {
+            answer.recurrence = {
+              previousResponseId: previousResponseMeta.id,
+              status: recurrenceStatus,
+              notedAt: new Date().toISOString(),
+            };
+          }
         }
 
         uploadedAnswers.push(answer);
@@ -375,6 +519,15 @@ export default function ChecklistByTagPage() {
       </div>
     );
   }
+
+  const hasPreviousNc = Object.keys(previousNcMap).length > 0;
+  const previousChecklistDate = previousResponseMeta?.createdAt
+    ? new Date(previousResponseMeta.createdAt)
+    : null;
+  const previousChecklistDateLabel =
+    previousChecklistDate && !Number.isNaN(previousChecklistDate.getTime())
+      ? previousChecklistDate.toLocaleString()
+      : null;
 
   const submitDisabled = !currentTemplate || userLookup.state !== "found";
 
@@ -469,62 +622,141 @@ export default function ChecklistByTagPage() {
 
           {currentTemplate ? (
             <div className="space-y-4">
-              {currentTemplate.questions.map((question, index) => (
-                <div
-                  key={question.id}
-                  className="space-y-3 rounded-lg border border-gray-700 bg-gray-900 p-3"
-                >
-                  <p className="font-medium">
-                    {index + 1}. {question.text}
-                  </p>
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    {(["ok", "nc", "na"] as const).map((value) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`q-${question.id}`}
-                          value={value}
-                          checked={answers[question.id]?.response === value}
-                          onChange={() => setResponse(question.id, value)}
-                          className="accent-blue-500"
-                        />
-                        <span className="uppercase">{value}</span>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-300">Observações</label>
-                    <textarea
-                      value={answers[question.id]?.observation ?? ""}
-                      onChange={(event) => setObservation(question.id, event.target.value)}
-                      rows={3}
-                      placeholder="Registre detalhes importantes, evidências ou observações adicionais"
-                      className={[
-                        "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
-                        "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
-                      ].join(" ")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-gray-400">
-                      Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
-                      className={[
-                        "mt-1 block w-full text-xs",
-                        "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
-                        "hover:file:bg-gray-600",
-                      ].join(" ")}
-                    />
-                  </div>
+              {previousLoading && (
+                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 text-sm text-gray-300">
+                  Verificando checklist anterior...
                 </div>
-              ))}
+              )}
+
+              {!previousLoading && previousError && (
+                <div className="rounded-lg border border-red-700/60 bg-red-900/30 p-3 text-sm text-red-200">
+                  {previousError}
+                </div>
+              )}
+
+              {!previousLoading && !previousError && hasPreviousNc && (
+                <div className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-100">
+                  Encontramos não conformidades no checklist anterior
+                  {previousChecklistDateLabel ? ` (${previousChecklistDateLabel})` : ""}. Informe se cada item foi
+                  resolvido ou permanece em não conformidade.
+                </div>
+              )}
+
+              {currentTemplate.questions.map((question, index) => {
+                const previousNc = previousNcMap[question.id];
+                const recurrenceStatus = recurrenceDecisions[question.id];
+                const isRecurrence = Boolean(previousNc);
+
+                return (
+                  <div
+                    key={question.id}
+                    className={[
+                      "space-y-3 rounded-lg border p-3 transition-colors",
+                      isRecurrence ? "border-amber-500/70 bg-amber-500/5" : "border-gray-700 bg-gray-900",
+                    ].join(" ")}
+                  >
+                    <p className="font-medium">
+                      {index + 1}. {question.text}
+                    </p>
+
+                    {isRecurrence && (
+                      <div className="space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100">
+                        <p>
+                          Este item foi marcado como não conforme no checklist anterior
+                          {previousChecklistDateLabel ? ` (${previousChecklistDateLabel})` : ""}. Informe se a não
+                          conformidade foi resolvida.
+                        </p>
+                        {previousNc?.observation && (
+                          <p className="text-xs text-amber-200/80">
+                            Observação anterior: <span className="text-amber-100">{previousNc.observation}</span>
+                          </p>
+                        )}
+                        {previousNc?.photoUrl && (
+                          <a
+                            href={previousNc.photoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex text-xs font-medium text-amber-100 underline"
+                          >
+                            Ver evidência anterior
+                          </a>
+                        )}
+                        <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`recurrence-${question.id}`}
+                              value="resolved"
+                              checked={recurrenceStatus === "resolved"}
+                              onChange={() => setRecurrenceDecision(question.id, "resolved")}
+                              className="accent-emerald-500"
+                            />
+                            <span>Resolvido</span>
+                          </label>
+                          <label className="inline-flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`recurrence-${question.id}`}
+                              value="still_nc"
+                              checked={recurrenceStatus === "still_nc"}
+                              onChange={() => setRecurrenceDecision(question.id, "still_nc")}
+                              className="accent-amber-500"
+                            />
+                            <span>Permanece não conforme</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      {(["ok", "nc", "na"] as const).map((value) => (
+                        <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`q-${question.id}`}
+                            value={value}
+                            checked={answers[question.id]?.response === value}
+                            onChange={() => setResponse(question.id, value)}
+                            className="accent-blue-500"
+                          />
+                          <span className="uppercase">{value}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300">Observações</label>
+                      <textarea
+                        value={answers[question.id]?.observation ?? ""}
+                        onChange={(event) => setObservation(question.id, event.target.value)}
+                        rows={3}
+                        placeholder="Registre detalhes importantes, evidências ou observações adicionais"
+                        className={[
+                          "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
+                          "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
+                        ].join(" ")}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-400">
+                        Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
+                        className={[
+                          "mt-1 block w-full text-xs",
+                          "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
+                          "hover:file:bg-gray-600",
+                        ].join(" ")}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-gray-400">Nenhum template selecionado ou vinculado.</p>
