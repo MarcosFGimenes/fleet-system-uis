@@ -342,6 +342,16 @@ export default function ResponseDetailPage() {
                       <span className="mt-1 inline-flex items-center rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                         NC identificado
                       </span>
+                      {answer.previousNcStatus === "still_nc" && (
+                        <span className="mt-2 inline-flex items-center rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100">
+                          Reincidência
+                        </span>
+                      )}
+                      {answer.previousNcStatus === "resolved" && (
+                        <span className="mt-2 inline-flex items-center rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-100">
+                          Resolvido após reincidência
+                        </span>
+                      )}
                       {answer.observation && (
                         <p className="mt-3 text-sm text-gray-200">
                           Observações do operador: <span className="text-gray-300">{answer.observation}</span>
@@ -469,6 +479,16 @@ export default function ResponseDetailPage() {
                       ? "Conforme"
                       : "Não se aplica"}
                   </span>
+                  {answer.previousNcStatus === "still_nc" && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">
+                      Histórico: não conformidade reincidente
+                    </p>
+                  )}
+                  {answer.previousNcStatus === "resolved" && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">
+                      Histórico: reincidência resolvida neste checklist
+                    </p>
+                  )}
                   {answer.observation && (
                     <p className="text-sm text-gray-300">Observações: {answer.observation}</p>
                   )}

@@ -7,6 +7,7 @@ import {
   ChecklistResponse,
   ChecklistTemplate,
   NonConformityStatus,
+  PreviousNcStatus,
 } from "@/types/checklist";
 import { Machine } from "@/types/machine";
 import {
@@ -39,6 +40,7 @@ type PendingItem = {
   observation?: string;
   operatorNome?: string | null;
   operatorMatricula?: string;
+  recurrenceStatus?: PreviousNcStatus;
 };
 
 type FeedbackState = {
@@ -145,6 +147,7 @@ export default function NonConformitiesAdminPage() {
             observation: answer.observation,
             operatorNome: response.operatorNome ?? null,
             operatorMatricula: response.operatorMatricula,
+            recurrenceStatus: answer.previousNcStatus,
           });
         }
       }
@@ -355,6 +358,11 @@ export default function NonConformitiesAdminPage() {
                   <p className="text-sm font-semibold text-white">
                     {index + 1}. {item.questionText}
                   </p>
+                  {item.recurrenceStatus === "still_nc" && (
+                    <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-200">
+                      Reincidência
+                    </span>
+                  )}
                   <div className="text-xs text-gray-400">
                     <span>Checklist enviado em {new Date(item.createdAt).toLocaleString()}</span>
                     {item.template && (
@@ -374,6 +382,11 @@ export default function NonConformitiesAdminPage() {
                   {item.observation && (
                     <p className="text-sm text-gray-300">
                       Observações do operador: {item.observation}
+                    </p>
+                  )}
+                  {item.recurrenceStatus === "still_nc" && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-300">
+                      Histórico: não conformidade reincidente
                     </p>
                   )}
                   {item.photoUrl && (

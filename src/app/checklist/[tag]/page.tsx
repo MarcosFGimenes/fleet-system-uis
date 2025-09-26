@@ -15,7 +15,12 @@ import {
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { Machine } from "@/types/machine";
-import { ChecklistAnswer, ChecklistTemplate } from "@/types/checklist";
+import {
+  ChecklistAnswer,
+  ChecklistResponse,
+  ChecklistTemplate,
+  PreviousNcStatus,
+} from "@/types/checklist";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type LookupState = "idle" | "searching" | "found" | "not_found" | "error";
@@ -38,6 +43,12 @@ type AnswerDraft = {
 
 type AnswerMap = Record<string, AnswerDraft>;
 type PhotoMap = Record<string, File | null>;
+type PreviousNcInfo = {
+  observation?: string;
+  previousNcStatus?: PreviousNcStatus;
+};
+type PreviousNcMap = Record<string, PreviousNcInfo>;
+type PreviousNcStatusMap = Record<string, PreviousNcStatus>;
 
 type UserLookup = {
   state: LookupState;
@@ -65,6 +76,8 @@ export default function ChecklistByTagPage() {
 
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [photos, setPhotos] = useState<PhotoMap>({});
+  const [previousNcMap, setPreviousNcMap] = useState<PreviousNcMap>({});
+  const [previousNcStatus, setPreviousNcStatus] = useState<PreviousNcStatusMap>({});
 
   const [userLookup, setUserLookup] = useState<UserLookup>(initialLookup);
   const [userInfo, setUserInfo] = useState<CachedUser | null>(null);
@@ -200,7 +213,117 @@ export default function ChecklistByTagPage() {
   useEffect(() => {
     setAnswers({});
     setPhotos({});
+    setPreviousNcMap({});
+    setPreviousNcStatus({});
   }, [selectedTemplateId]);
+
+  useEffect(() => {
+    const machineId = machine?.id;
+    const templateId = currentTemplate?.id;
+
+    if (!machineId || !templateId) {
+      setPreviousNcMap({});
+      setPreviousNcStatus({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPreviousNc = async () => {
+      try {
+        const previousQuery = query(
+          responsesCol,
+          where("machineId", "==", machineId),
+          where("templateId", "==", templateId),
+        );
+        const previousSnap = await getDocs(previousQuery);
+        if (cancelled) {
+          return;
+        }
+
+        if (previousSnap.empty) {
+          setPreviousNcMap({});
+          setPreviousNcStatus({});
+          return;
+        }
+
+        let latest: ChecklistResponse | null = null;
+        let latestMillis = -Infinity;
+
+        previousSnap.forEach((docSnap) => {
+          const data = docSnap.data() as Omit<ChecklistResponse, "id">;
+          const response = { id: docSnap.id, ...data } as ChecklistResponse;
+          const tsValue = (() => {
+            try {
+              const maybeTs = (response.createdAtTs as unknown) as {
+                toMillis?: () => number;
+              } | null;
+              if (maybeTs && typeof maybeTs.toMillis === "function") {
+                return maybeTs.toMillis();
+              }
+            } catch {
+              // ignore parsing errors
+            }
+            const parsed = new Date(response.createdAt).getTime();
+            return Number.isFinite(parsed) ? parsed : -Infinity;
+          })();
+
+          if (tsValue > latestMillis) {
+            latestMillis = tsValue;
+            latest = response;
+          }
+        });
+
+        if (!latest) {
+          setPreviousNcMap({});
+          setPreviousNcStatus({});
+          return;
+        }
+
+        const map: PreviousNcMap = {};
+        latest.answers?.forEach((answer) => {
+          if (answer.response === "nc") {
+            map[answer.questionId] = {
+              observation: answer.observation,
+              previousNcStatus: answer.previousNcStatus,
+            };
+          }
+        });
+
+        setPreviousNcMap(map);
+        setPreviousNcStatus((prev) => {
+          const next: PreviousNcStatusMap = {};
+          for (const [questionId, info] of Object.entries(map)) {
+            if (prev[questionId]) {
+              next[questionId] = prev[questionId];
+            } else if (info.previousNcStatus) {
+              next[questionId] = info.previousNcStatus;
+            }
+          }
+          return next;
+        });
+      } catch (error) {
+        console.error("Erro ao carregar histórico de não conformidades", error);
+        if (!cancelled) {
+          setPreviousNcMap({});
+          setPreviousNcStatus({});
+        }
+      }
+    };
+
+    void loadPreviousNc();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [machine?.id, currentTemplate?.id, responsesCol]);
+
+  const setPreviousNcResponse = (questionId: string, status: PreviousNcStatus) => {
+    setPreviousNcStatus((prev) => ({
+      ...prev,
+      [questionId]: status,
+    }));
+  };
 
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
     setAnswers((prev) => {
@@ -267,6 +390,19 @@ export default function ChecklistByTagPage() {
         return;
       }
 
+      const previousQuestions = currentTemplate.questions
+        .map((question) => question.id)
+        .filter((questionId) => previousNcMap[questionId]);
+      const missingPrevious = previousQuestions.filter(
+        (questionId) => !previousNcStatus[questionId],
+      );
+      if (missingPrevious.length) {
+        alert(
+          "Informe se os itens não conformes do último checklist foram resolvidos ou continuam não conformes.",
+        );
+        return;
+      }
+
       const photoIssues = currentTemplate.questions.filter((question) => {
         const base = answers[question.id];
         return (
@@ -313,6 +449,10 @@ export default function ChecklistByTagPage() {
         const observationText = base.observation?.trim();
         if (observationText) {
           answer.observation = observationText;
+        }
+
+        if (previousNcStatus[question.id]) {
+          answer.previousNcStatus = previousNcStatus[question.id];
         }
 
         uploadedAnswers.push(answer);
@@ -469,62 +609,117 @@ export default function ChecklistByTagPage() {
 
           {currentTemplate ? (
             <div className="space-y-4">
-              {currentTemplate.questions.map((question, index) => (
-                <div
-                  key={question.id}
-                  className="space-y-3 rounded-lg border border-gray-700 bg-gray-900 p-3"
-                >
-                  <p className="font-medium">
-                    {index + 1}. {question.text}
-                  </p>
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    {(["ok", "nc", "na"] as const).map((value) => (
-                      <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name={`q-${question.id}`}
-                          value={value}
-                          checked={answers[question.id]?.response === value}
-                          onChange={() => setResponse(question.id, value)}
-                          className="accent-blue-500"
-                        />
-                        <span className="uppercase">{value}</span>
+              {currentTemplate.questions.map((question, index) => {
+                const isRecurrent = Boolean(previousNcMap[question.id]);
+                const containerClass = [
+                  "space-y-3 rounded-lg border p-3 transition",
+                  isRecurrent
+                    ? "border-amber-400/60 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.2)]"
+                    : "border-gray-700 bg-gray-900",
+                ].join(" ");
+
+                return (
+                  <div key={question.id} className={containerClass}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">
+                        {index + 1}. {question.text}
+                      </p>
+                      {isRecurrent && (
+                        <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-200">
+                          Reincidência
+                        </span>
+                      )}
+                    </div>
+
+                    {isRecurrent && (
+                      <div className="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
+                        <p className="font-semibold text-amber-200">
+                          Este item estava não conforme no último checklist. A situação foi resolvida?
+                        </p>
+                        {previousNcMap[question.id]?.observation && (
+                          <p className="text-xs text-amber-100/80">
+                            Observação anterior:{" "}
+                            <span className="font-medium text-amber-50">
+                              {previousNcMap[question.id]?.observation}
+                            </span>
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-3 text-xs sm:text-sm">
+                          <label className="inline-flex items-center gap-2 cursor-pointer text-amber-100">
+                            <input
+                              type="radio"
+                              name={`history-${question.id}`}
+                              value="resolved"
+                              checked={previousNcStatus[question.id] === "resolved"}
+                              onChange={() => setPreviousNcResponse(question.id, "resolved")}
+                              className="accent-amber-400"
+                            />
+                            <span>Resolvido</span>
+                          </label>
+                          <label className="inline-flex items-center gap-2 cursor-pointer text-amber-100">
+                            <input
+                              type="radio"
+                              name={`history-${question.id}`}
+                              value="still_nc"
+                              checked={previousNcStatus[question.id] === "still_nc"}
+                              onChange={() => setPreviousNcResponse(question.id, "still_nc")}
+                              className="accent-amber-400"
+                            />
+                            <span>Continua não conforme</span>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 text-sm">
+                      {(["ok", "nc", "na"] as const).map((value) => (
+                        <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name={`q-${question.id}`}
+                            value={value}
+                            checked={answers[question.id]?.response === value}
+                            onChange={() => setResponse(question.id, value)}
+                            className="accent-blue-500"
+                          />
+                          <span className="uppercase">{value}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300">Observações</label>
+                      <textarea
+                        value={answers[question.id]?.observation ?? ""}
+                        onChange={(event) => setObservation(question.id, event.target.value)}
+                        rows={3}
+                        placeholder="Registre detalhes importantes, evidências ou observações adicionais"
+                        className={[
+                          "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
+                          "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
+                        ].join(" ")}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-gray-400">
+                        Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
                       </label>
-                    ))}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
+                        className={[
+                          "mt-1 block w-full text-xs",
+                          "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
+                          "hover:file:bg-gray-600",
+                        ].join(" ")}
+                      />
+                    </div>
                   </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-300">Observações</label>
-                    <textarea
-                      value={answers[question.id]?.observation ?? ""}
-                      onChange={(event) => setObservation(question.id, event.target.value)}
-                      rows={3}
-                      placeholder="Registre detalhes importantes, evidências ou observações adicionais"
-                      className={[
-                        "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
-                        "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
-                      ].join(" ")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-gray-400">
-                      Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
-                      className={[
-                        "mt-1 block w-full text-xs",
-                        "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
-                        "hover:file:bg-gray-600",
-                      ].join(" ")}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-gray-400">Nenhum template selecionado ou vinculado.</p>

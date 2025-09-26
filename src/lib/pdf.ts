@@ -178,6 +178,12 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
       addParagraph(`Observações: ${answer.observation}`);
     }
 
+    if (answer.previousNcStatus === "still_nc") {
+      addParagraph("Histórico: não conformidade reincidente.");
+    } else if (answer.previousNcStatus === "resolved") {
+      addParagraph("Histórico: reincidência resolvida neste checklist.");
+    }
+
     if (answer.photoUrl) {
       addParagraph(`Foto: ${answer.photoUrl}`);
     }

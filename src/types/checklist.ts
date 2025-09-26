@@ -15,11 +15,14 @@ export interface ChecklistTemplate {
   questions: ChecklistQuestion[];
 }
 
+export type PreviousNcStatus = "resolved" | "still_nc";
+
 export interface ChecklistAnswer {
   questionId: string;
   response: "ok" | "nc" | "na";
   photoUrl?: string;
   observation?: string;
+  previousNcStatus?: PreviousNcStatus;
 }
 
 export type NonConformityStatus = "open" | "in_progress" | "resolved";
