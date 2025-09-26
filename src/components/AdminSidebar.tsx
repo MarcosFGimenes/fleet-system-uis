@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -13,11 +13,12 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Início" },
-  { href: "/machines", label: "Máquinas" },
-  { href: "/templates", label: "Templates" },
-  { href: "/responses", label: "Checklists" },
-  { href: "/non-conformities", label: "Não Conformidades" },
-  { href: "/users", label: "Usuários", badge: "em breve" },
+  { href: "/admin/analytics", label: "KPIs", badge: "Gráficos de perfomance" },
+  { href: "/admin/machines", label: "Máquinas", badge: "Gerenciar cadastros" },
+  { href: "/admin/templates", label: "Templates", badge: "modelos de checklist" },
+  { href: "/admin/responses", label: "Checklists", badge: "Listar CL realizados" },
+  { href: "/admin/non-conformities", label: "Não Conformidades", badge: "Gerenciar NC's" },
+  { href: "/admin/users", label: "Usuários", badge: "em breve" },
 ];
 
 export default function AdminSidebar() {
@@ -115,5 +116,3 @@ function Brand() {
     </div>
   );
 }
-
-
