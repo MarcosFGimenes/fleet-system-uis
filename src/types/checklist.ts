@@ -21,6 +21,17 @@ export interface ChecklistAnswer {
   photoUrl?: string;
 }
 
+export type NonConformityStatus = "open" | "in_progress" | "resolved";
+
+export interface ChecklistNonConformityTreatment {
+  questionId: string;
+  summary?: string;
+  responsible?: string;
+  deadline?: string;
+  status: NonConformityStatus;
+  updatedAt?: string;
+}
+
 export interface ChecklistResponse {
   id: string;
   machineId: string;
@@ -33,4 +44,5 @@ export interface ChecklistResponse {
   km?: number;
   horimetro?: number;
   answers: ChecklistAnswer[];
+  nonConformityTreatments?: ChecklistNonConformityTreatment[];
 }
