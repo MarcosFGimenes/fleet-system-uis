@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  updateDoc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { adminDb } from "@/lib/firebase-admin";
 import {
   defaultDueAt,
   mapNonConformityDoc,
@@ -106,9 +95,9 @@ function diffChanged(before: unknown, after: unknown): boolean {
 }
 
 async function fetchDoc(id: string) {
-  const ref = doc(db, "nonConformities", id);
-  const snapshot = await getDoc(ref);
-  if (!snapshot.exists()) {
+  const ref = adminDb.collection("nonConformities").doc(id);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) {
     return null;
   }
   return { ref, snapshot } as const;
@@ -142,8 +131,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     const data = mapNonConformityDoc(recordRef.snapshot);
 
-    const auditsRef = collection(recordRef.ref, "audits");
-    const auditsSnap = await getDocs(query(auditsRef, orderBy("atISO", "desc"), limit(AUDIT_LIMIT)));
+    const auditsRef = recordRef.ref.collection("audits");
+    const auditsSnap = await auditsRef.orderBy("atISO", "desc").limit(AUDIT_LIMIT).get();
     const audits = auditsSnap.docs.map((docSnap) => ({
       id: docSnap.id,
       ...(docSnap.data() as Record<string, unknown>),
@@ -257,17 +246,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ data: existing, audits: [] });
     }
 
-    await updateDoc(recordRef.ref, updates);
+    await recordRef.ref.update(updates);
 
     const actor = payload.actor ?? payload.updatedBy ?? {};
-    await addDoc(collection(recordRef.ref, "audits"), {
+    await recordRef.ref.collection("audits").add({
       byUserId: actor.id ?? actor.uid ?? "system",
       byNome: actor.nome ?? actor.name ?? null,
       atISO: new Date().toISOString(),
       diff,
     });
 
-    const refreshed = await getDoc(recordRef.ref);
+    const refreshed = await recordRef.ref.get();
     const updated = mapNonConformityDoc(refreshed);
 
     return NextResponse.json({ data: updated });
