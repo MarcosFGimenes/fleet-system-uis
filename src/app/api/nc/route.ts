@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
-import type { FirebaseFirestore } from "firebase-admin/firestore";
 import { Timestamp } from "firebase-admin/firestore";
+import type { DocumentData, Query } from "firebase-admin/firestore";
 import { z } from "zod";
 
 import { getAdminDb } from "@/lib/firebase-admin";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ChecklistAnswer = {
@@ -238,7 +239,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = getAdminDb();
-    let baseQuery = db.collection("checklistResponses") as FirebaseFirestore.Query<FirebaseFirestore.DocumentData>;
+    let baseQuery = db.collection("checklistResponses") as Query<DocumentData>;
 
     if (machineId) {
       baseQuery = baseQuery.where("machineId", "==", machineId);
@@ -352,7 +353,10 @@ export async function GET(request: NextRequest) {
 
     const total = filtered.length;
     const start = (page - 1) * pageSize;
-    const paginated = filtered.slice(start, start + pageSize).map(({ sortKey, ...rest }) => rest);
+    const paginated = filtered.slice(start, start + pageSize).map(({ sortKey, ...rest }) => {
+      void sortKey;
+      return rest;
+    });
     const hasMore = start + pageSize < total;
 
     return NextResponse.json({ data: paginated, page, pageSize, total, hasMore });
