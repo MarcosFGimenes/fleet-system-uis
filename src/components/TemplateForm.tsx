@@ -1,7 +1,17 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import { ChecklistQuestion, ChecklistTemplate } from "@/types/checklist";
+import {
+  ChecklistPhotoRule,
+  ChecklistQuestion,
+  ChecklistTemplate,
+} from "@/types/checklist";
+
+type QuestionDraft = {
+  id: string;
+  text: string;
+  photoRule: ChecklistPhotoRule;
+};
 
 type Props = {
   initial?: Partial<ChecklistTemplate>;
@@ -16,22 +26,33 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
   );
   const [version, setVersion] = useState<number>(initial?.version ?? 1);
   const [isActive, setIsActive] = useState<boolean>(initial?.isActive ?? true);
-  const [questions, setQuestions] = useState<ChecklistQuestion[]>(
-    initial?.questions ?? []
-  );
+  const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
+    if (!initial?.questions?.length) {
+      return [];
+    }
+    return initial.questions.map((question) => ({
+      id: question.id,
+      text: question.text,
+      photoRule: question.photoRule
+        ? question.photoRule
+        : question.requiresPhoto
+        ? "required_nc"
+        : "optional",
+    }));
+  });
 
   useEffect(() => {
     if (!initial) {
       setQuestions([
         {
           id: crypto.randomUUID(),
-          text: "Ha vazamentos visiveis?",
-          requiresPhoto: true,
+          text: "Há vazamentos visíveis?",
+          photoRule: "required_nc",
         },
         {
           id: crypto.randomUUID(),
           text: "Luzes e setas funcionando?",
-          requiresPhoto: false,
+          photoRule: "optional",
         },
       ]);
     }
@@ -40,11 +61,11 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
   const addQuestion = () => {
     setQuestions((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), text: "", requiresPhoto: false },
+      { id: crypto.randomUUID(), text: "", photoRule: "optional" },
     ]);
   };
 
-  const updateQuestion = (id: string, patch: Partial<ChecklistQuestion>) => {
+  const updateQuestion = (id: string, patch: Partial<QuestionDraft>) => {
     setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
   };
 
@@ -70,8 +91,19 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       type,
       version,
       isActive,
-      questions: clean,
+      questions: clean.map((question) => ({
+        id: question.id,
+        text: question.text,
+        photoRule: question.photoRule,
+        requiresPhoto: question.photoRule === "required_nc",
+      } satisfies ChecklistQuestion)),
     });
+  };
+
+  const photoRuleLabel: Record<QuestionDraft["photoRule"], string> = {
+    none: "Não permite foto",
+    optional: "Foto opcional",
+    required_nc: "Foto obrigatória se marcar NC",
   };
 
   return (
@@ -154,18 +186,25 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
               </div>
 
               <div className="mt-2 flex items-center justify-between">
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={question.requiresPhoto}
+                <label className="flex flex-col gap-2 text-sm">
+                  <span className="text-xs uppercase tracking-wide text-gray-400">
+                    Fotos
+                  </span>
+                  <select
+                    value={question.photoRule}
                     onChange={(event) =>
                       updateQuestion(question.id, {
-                        requiresPhoto: event.target.checked,
+                        photoRule: event.target.value as ChecklistPhotoRule,
                       })
                     }
-                    className="accent-blue-500"
-                  />
-                  Foto obrigatoria quando NC
+                    className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                  >
+                    {Object.entries(photoRuleLabel).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <button

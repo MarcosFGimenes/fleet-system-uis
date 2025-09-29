@@ -1,9 +1,21 @@
 ﻿import type { Timestamp } from "firebase/firestore";
 
+export type ChecklistPhotoRule = "none" | "optional" | "required_nc";
+
 export interface ChecklistQuestion {
   id: string;
   text: string;
-  requiresPhoto: boolean;
+  /**
+   * Define se a pergunta permite fotos (opcional) ou se exige ao menos uma
+   * evidência quando marcada como não conforme. Para compatibilidade com
+   * dados antigos, mantemos o campo `requiresPhoto` que será derivado deste.
+   */
+  photoRule?: ChecklistPhotoRule;
+  /**
+   * @deprecated Usado apenas para manter compatibilidade com registros
+   *             existentes. Utilize `photoRule`.
+   */
+  requiresPhoto?: boolean;
 }
 
 export interface ChecklistTemplate {
@@ -26,6 +38,14 @@ export interface ChecklistAnswerRecurrence {
 export interface ChecklistAnswer {
   questionId: string;
   response: "ok" | "nc" | "na";
+  /**
+   * URLs das fotos anexadas à resposta. Em respostas antigas pode existir
+   * apenas `photoUrl`.
+   */
+  photoUrls?: string[];
+  /**
+   * @deprecated Campo legado mantido para leitura de checklists antigos.
+   */
   photoUrl?: string;
   observation?: string;
   recurrence?: ChecklistAnswerRecurrence;

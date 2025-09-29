@@ -82,7 +82,44 @@ const formatAnswerResponse = (answer: ChecklistAnswer) => {
   }
 };
 
-const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: AppendOptions = {}) => {
+const getAnswerPhotoUrls = (answer: ChecklistAnswer) => {
+  if (answer.photoUrls?.length) {
+    return answer.photoUrls;
+  }
+  return answer.photoUrl ? [answer.photoUrl] : [];
+};
+
+const resolveImageFormat = (dataUrl: string) => {
+  const match = /^data:(image\/[^;]+);/i.exec(dataUrl);
+  if (!match) return "JPEG";
+  const mime = match[1];
+  if (mime.includes("png")) return "PNG";
+  if (mime.includes("webp")) return "WEBP";
+  return "JPEG";
+};
+
+const fetchImageDataUrl = async (url: string) => {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Erro ao ler imagem"));
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("Falha ao carregar imagem do checklist", error);
+    return null;
+  }
+};
+
+const appendChecklistToDoc = async (
+  doc: jsPDF,
+  detail: ChecklistPdfDetail,
+  options: AppendOptions = {},
+) => {
   const { response, machine, template } = detail;
   const margin = 14;
   const lineHeight = 6;
@@ -168,7 +205,8 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
     (template?.questions ?? []).map((question) => [question.id, question.text]),
   );
 
-  response.answers.forEach((answer, index) => {
+  for (let index = 0; index < response.answers.length; index++) {
+    const answer = response.answers[index];
     const questionTitle = questionTextById.get(answer.questionId) ?? answer.questionId;
     addParagraph(`${index + 1}. ${questionTitle}`, { bold: true });
 
@@ -178,8 +216,33 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
       addParagraph(`Observações: ${answer.observation}`);
     }
 
-    if (answer.photoUrl) {
-      addParagraph(`Foto: ${answer.photoUrl}`);
+    const photoUrls = getAnswerPhotoUrls(answer);
+    if (photoUrls.length) {
+      addParagraph(photoUrls.length > 1 ? "Fotos:" : "Foto:");
+      for (const photoUrl of photoUrls) {
+        const dataUrl = await fetchImageDataUrl(photoUrl);
+        if (!dataUrl) {
+          addParagraph(`• ${photoUrl}`);
+          continue;
+        }
+
+        try {
+          const format = resolveImageFormat(dataUrl);
+          const { width, height } = doc.getImageProperties(dataUrl);
+          const maxWidth = pageWidth - margin * 2;
+          const ratio = Math.min(maxWidth / width, 120 / height, 1);
+          const displayWidth = width * ratio;
+          const displayHeight = height * ratio;
+          const linesNeeded = Math.ceil(displayHeight / lineHeight) + 1;
+          ensureSpace(linesNeeded);
+          doc.addImage(dataUrl, format, margin, y, displayWidth, displayHeight);
+          y += displayHeight + 2;
+          addParagraph(photoUrl);
+        } catch (error) {
+          console.error("Falha ao inserir imagem no PDF", error);
+          addParagraph(`• ${photoUrl}`);
+        }
+      }
     }
 
     if (answer.recurrence) {
@@ -189,19 +252,18 @@ const appendChecklistToDoc = (doc: jsPDF, detail: ChecklistPdfDetail, options: A
           : "Operador informou que a não conformidade foi resolvida";
       addParagraph(`Reincidência: ${recurrenceLabel}`);
     }
-
     addParagraph("", { spacing: 2 });
-  });
+  }
 };
 
-export const buildChecklistPdf = (detail: ChecklistPdfDetail) => {
+export const buildChecklistPdf = async (detail: ChecklistPdfDetail) => {
   const doc = new jsPDF();
-  appendChecklistToDoc(doc, detail);
+  await appendChecklistToDoc(doc, detail);
   return doc;
 };
 
-export const saveChecklistPdf = (detail: ChecklistPdfDetail, filename?: string) => {
-  const doc = buildChecklistPdf(detail);
+export const saveChecklistPdf = async (detail: ChecklistPdfDetail, filename?: string) => {
+  const doc = await buildChecklistPdf(detail);
   const baseName = buildChecklistDocumentBaseName(detail, filename);
   doc.save(`${baseName}.pdf`);
 };
@@ -220,12 +282,12 @@ export const downloadChecklistsZip = async (
 
   const zip = new JSZip();
 
-  details.forEach((detail) => {
-    const doc = buildChecklistPdf(detail);
+  for (const detail of details) {
+    const doc = await buildChecklistPdf(detail);
     const pdfData = doc.output("arraybuffer");
     const filename = `${buildChecklistDocumentBaseName(detail)}.pdf`;
     zip.file(filename, pdfData);
-  });
+  }
 
   const baseName = buildChecklistDocumentBaseName(
     details[0],

@@ -157,9 +157,9 @@ export default function ResponsesAdminPage() {
     await fetchRows();
   };
 
-  const handleExportSingle = (row: Row) => {
+  const handleExportSingle = async (row: Row) => {
     try {
-      saveChecklistPdf({ response: row, machine: row.machine, template: row.template });
+      await saveChecklistPdf({ response: row, machine: row.machine, template: row.template });
     } catch (error) {
       console.error("Erro ao exportar checklist", error);
       alert("Não foi possível exportar o PDF deste checklist.");
@@ -303,14 +303,18 @@ export default function ResponsesAdminPage() {
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={handleExportPeriod}
+              onClick={() => {
+                void handleExportPeriod();
+              }}
               disabled={periodExporting || loading || rows.length === 0}
               className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {periodExporting ? "Exportando..." : "Exportar período (PDF)"}
             </button>
             <button
-              onClick={handleDeletePeriod}
+              onClick={() => {
+                void handleDeletePeriod();
+              }}
               disabled={periodDeleting || loading || rows.length === 0}
               className="rounded-md border border-red-600 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -403,7 +407,9 @@ export default function ResponsesAdminPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => handleExportSingle(row)}
+                          onClick={() => {
+                            void handleExportSingle(row);
+                          }}
                           className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-blue-500"
                         >
                           PDF

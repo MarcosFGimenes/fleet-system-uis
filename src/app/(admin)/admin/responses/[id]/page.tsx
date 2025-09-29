@@ -1,5 +1,6 @@
 ﻿"use client";
 
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
@@ -12,6 +13,13 @@ import {
   ChecklistNonConformityTreatment,
   NonConformityStatus,
 } from "@/types/checklist";
+
+const getAnswerPhotos = (answer: ChecklistResponse["answers"][number]) => {
+  if (answer.photoUrls?.length) {
+    return answer.photoUrls;
+  }
+  return answer.photoUrl ? [answer.photoUrl] : [];
+};
 
 type Params = {
   id: string;
@@ -214,9 +222,9 @@ export default function ResponseDetailPage() {
 
   const statusOrder: NonConformityStatus[] = ["open", "in_progress", "resolved"];
 
-  const handleExportPdf = () => {
+  const handleExportPdf = async () => {
     try {
-      saveChecklistPdf({
+      await saveChecklistPdf({
         response,
         machine: machine ?? undefined,
         template: template ?? undefined,
@@ -245,7 +253,9 @@ export default function ResponseDetailPage() {
               Voltar
             </button>
             <button
-              onClick={handleExportPdf}
+              onClick={() => {
+                void handleExportPdf();
+              }}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
             >
               Exportar PDF
@@ -326,8 +336,9 @@ export default function ResponseDetailPage() {
             </div>
           )}
           <div className="space-y-4">
-            {nonConformities.map((answer, index) => {
-              const treatment = getTreatment(answer.questionId);
+          {nonConformities.map((answer, index) => {
+            const treatment = getTreatment(answer.questionId);
+            const photos = getAnswerPhotos(answer);
 
               return (
                 <div
@@ -363,15 +374,27 @@ export default function ResponseDetailPage() {
                         </p>
                       )}
                     </div>
-                    {answer.photoUrl && (
-                      <a
-                        href={answer.photoUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs font-medium text-blue-300 underline"
-                      >
-                        Ver evidência
-                      </a>
+                    {photos.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-3 sm:mt-0 sm:justify-end">
+                        {photos.map((photoUrl, photoIndex) => (
+                          <a
+                            key={`${answer.questionId}-photo-${photoIndex}-${photoUrl}`}
+                            href={photoUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-white/10"
+                          >
+                            <img
+                              src={photoUrl}
+                              alt={`Foto ${photoIndex + 1} da questão ${questionText(answer.questionId)}`}
+                              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                            />
+                            <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wide text-white">
+                              Ver foto {photoIndex + 1}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
                     )}
                   </div>
 
@@ -459,48 +482,64 @@ export default function ResponseDetailPage() {
       <section className="space-y-4 rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
         <h2 className="text-lg font-semibold text-white">Respostas do checklist</h2>
         <div className="grid grid-cols-1 gap-4">
-          {response.answers.map((answer, index) => (
-            <article
-              key={answer.questionId}
-              className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4 transition hover:border-gray-500"
-            >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-white">
-                    {index + 1}. {questionText(answer.questionId)}
-                  </p>
-                  <span
-                    className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
-                      answer.response === "nc"
-                        ? "bg-red-700 text-white"
+          {response.answers.map((answer, index) => {
+            const photos = getAnswerPhotos(answer);
+
+            return (
+              <article
+                key={answer.questionId}
+                className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4 transition hover:border-gray-500"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-white">
+                      {index + 1}. {questionText(answer.questionId)}
+                    </p>
+                    <span
+                      className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
+                        answer.response === "nc"
+                          ? "bg-red-700 text-white"
+                          : answer.response === "ok"
+                          ? "bg-emerald-700 text-white"
+                          : "bg-gray-700 text-gray-100"
+                      }`}
+                    >
+                      {answer.response === "nc"
+                        ? "Não conforme"
                         : answer.response === "ok"
-                        ? "bg-emerald-700 text-white"
-                        : "bg-gray-700 text-gray-100"
-                    }`}
-                  >
-                    {answer.response === "nc"
-                      ? "Não conforme"
-                      : answer.response === "ok"
-                      ? "Conforme"
-                      : "Não se aplica"}
-                  </span>
-                  {answer.observation && (
-                    <p className="text-sm text-[var(--muted)]">Observações: {answer.observation}</p>
+                        ? "Conforme"
+                        : "Não se aplica"}
+                    </span>
+                    {answer.observation && (
+                      <p className="text-sm text-[var(--muted)]">Observações: {answer.observation}</p>
+                    )}
+                  </div>
+                  {photos.length > 0 && (
+                    <div className="flex flex-wrap gap-3 sm:justify-end">
+                      {photos.map((photoUrl, photoIndex) => (
+                        <a
+                          key={`${answer.questionId}-photo-${photoIndex}-${photoUrl}`}
+                          href={photoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-white/10"
+                        >
+                          <img
+                            src={photoUrl}
+                            alt={`Foto ${photoIndex + 1} da questão ${questionText(answer.questionId)}`}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          />
+                          <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wide text-white">
+                            Foto {photoIndex + 1}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {answer.photoUrl && (
-                  <a
-                    href={answer.photoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-medium text-blue-300 underline"
-                  >
-                    Abrir foto
-                  </a>
-                )}
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>

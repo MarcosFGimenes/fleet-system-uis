@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element */
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   addDoc,
@@ -14,14 +15,16 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
 import { Machine } from "@/types/machine";
 import type {
   ChecklistAnswer,
   ChecklistRecurrenceStatus,
   ChecklistResponse,
   ChecklistTemplate,
+  ChecklistPhotoRule,
 } from "@/types/checklist";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useUserLookup } from "@/hooks/useUserLookup";
 import { useNotification } from "@/hooks/useNotification";
 import Notification from "@/components/Notification";
@@ -37,10 +40,17 @@ type Params = {
   tag: string;
 };
 
+type DraftPhoto = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 type AnswerDraft = {
   questionId: string;
   response?: "ok" | "nc" | "na";
   observation?: string;
+  photos?: DraftPhoto[];
 };
 
 type AnswerMap = Record<string, AnswerDraft>;
@@ -70,6 +80,19 @@ type ChecklistResponsePayload = {
   km?: number;
   horimetro?: number;
   extraNonConformities?: ExtraNc[];
+};
+
+const resolvePhotoRule = (
+  question: ChecklistTemplate["questions"][number],
+): ChecklistPhotoRule => {
+  if (question.photoRule) return question.photoRule;
+  return question.requiresPhoto ? "required_nc" : "optional";
+};
+
+const getAnswerPhotoUrls = (answer?: ChecklistAnswer) => {
+  if (!answer) return [] as string[];
+  if (answer.photoUrls?.length) return answer.photoUrls;
+  return answer.photoUrl ? [answer.photoUrl] : [];
 };
 
 /* ============================
@@ -166,6 +189,26 @@ export default function ChecklistByTagPage() {
 
   const [answers, setAnswers] = useState<AnswerMap>({});
 
+  const previewUrlsRef = useRef<Set<string>>(new Set());
+
+  const registerPreviewUrl = (url: string) => {
+    previewUrlsRef.current.add(url);
+  };
+
+  const revokePreviewUrl = (url: string) => {
+    if (previewUrlsRef.current.has(url)) {
+      URL.revokeObjectURL(url);
+      previewUrlsRef.current.delete(url);
+    }
+  };
+
+  const clearAllPreviewUrls = () => {
+    previewUrlsRef.current.forEach((url) => {
+      URL.revokeObjectURL(url);
+    });
+    previewUrlsRef.current.clear();
+  };
+
   const [previousResponseMeta, setPreviousResponseMeta] =
     useState<PreviousResponseMeta | null>(null);
   const [previousNcMap, setPreviousNcMap] = useState<PreviousNcMap>({});
@@ -184,6 +227,12 @@ export default function ChecklistByTagPage() {
   const machinesCol = useMemo(() => collection(db, "machines"), []);
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
+
+  useEffect(() => {
+    return () => {
+      clearAllPreviewUrls();
+    };
+  }, []);
 
   /* ============================
      Carregamento inicial
@@ -323,6 +372,7 @@ export default function ChecklistByTagPage() {
 
   // Reset ao trocar de template
   useEffect(() => {
+    clearAllPreviewUrls();
     setAnswers({});
     setRecurrenceDecisions({});
     setPreviousNcMap({});
@@ -345,6 +395,51 @@ export default function ChecklistByTagPage() {
       ...prev,
       [questionId]: { ...(prev[questionId] ?? { questionId }), observation: value },
     }));
+  };
+
+  const addPhotos = (questionId: string, fileList: FileList | null) => {
+    if (!fileList?.length) return;
+
+    const items: DraftPhoto[] = Array.from(fileList).map((file) => {
+      const previewUrl = URL.createObjectURL(file);
+      registerPreviewUrl(previewUrl);
+      return { id: crypto.randomUUID(), file, previewUrl };
+    });
+
+    setAnswers((prev) => {
+      const previous = prev[questionId] ?? { questionId };
+      const currentPhotos = previous.photos ?? [];
+      return {
+        ...prev,
+        [questionId]: {
+          ...previous,
+          photos: [...currentPhotos, ...items],
+        },
+      };
+    });
+  };
+
+  const removePhoto = (questionId: string, photoId: string) => {
+    setAnswers((prev) => {
+      const previous = prev[questionId];
+      if (!previous?.photos?.length) return prev;
+
+      const nextPhotos = previous.photos.filter((photo) => {
+        if (photo.id === photoId) {
+          revokePreviewUrl(photo.previewUrl);
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        ...prev,
+        [questionId]: {
+          ...previous,
+          photos: nextPhotos,
+        },
+      };
+    });
   };
 
   const setRecurrenceDecision = (
@@ -414,7 +509,27 @@ export default function ChecklistByTagPage() {
         return;
       }
 
+      const missingPhotos = currentTemplate.questions
+        .map((question) => {
+          const base = answers[question.id];
+          const rule = resolvePhotoRule(question);
+          if (rule !== "required_nc") return null;
+          if (base?.response !== "nc") return null;
+          if (base.photos?.length) return null;
+          return question.text;
+        })
+        .filter((text): text is string => Boolean(text));
+
+      if (missingPhotos.length) {
+        showNotification(
+          `Adicione ao menos uma foto para as perguntas em não conformidade: ${missingPhotos.join(", ")}.`,
+          "warning",
+        );
+        return;
+      }
+
       const uploadedAnswers: ChecklistAnswer[] = [];
+      const uploadBatchId = `${Date.now()}`;
       for (const question of currentTemplate.questions) {
         const base = answers[question.id];
         if (!base || !base.response) continue;
@@ -426,6 +541,34 @@ export default function ChecklistByTagPage() {
 
         const observationText = base.observation?.trim();
         if (observationText) answer.observation = observationText;
+
+        const draftPhotos = base.photos ?? [];
+        if (draftPhotos.length) {
+          const photoUrls: string[] = [];
+          for (const draft of draftPhotos) {
+            const storageRef = ref(
+              storage,
+              `checklists/${machine.id}/${currentTemplate.id}/${uploadBatchId}/${question.id}-${draft.id}`,
+            );
+            try {
+              await uploadBytes(storageRef, draft.file);
+              const url = await getDownloadURL(storageRef);
+              photoUrls.push(url);
+            } catch (error) {
+              console.error("Erro ao enviar foto do checklist", error);
+              showNotification(
+                "Não foi possível fazer upload de uma das fotos. Verifique sua conexão e tente novamente.",
+                "error",
+              );
+              const uploadError = new Error("PHOTO_UPLOAD_ERROR");
+              uploadError.name = "PhotoUploadError";
+              throw uploadError;
+            }
+          }
+          if (photoUrls.length) {
+            answer.photoUrls = photoUrls;
+          }
+        }
 
         if (previousResponseMeta && previousNcMap[question.id]) {
           const recurrenceStatus = recurrenceDecisions[question.id];
@@ -488,10 +631,13 @@ export default function ChecklistByTagPage() {
       await addDoc(responsesCol, payload);
 
       showNotification("Checklist enviado com sucesso!", "success");
+      clearAllPreviewUrls();
       router.push("/login");
     } catch (error) {
       console.error(error);
-      showNotification("Erro ao enviar checklist. Tente novamente.", "error");
+      if (!(error instanceof Error && error.name === "PhotoUploadError")) {
+        showNotification("Erro ao enviar checklist. Tente novamente.", "error");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -660,6 +806,13 @@ export default function ChecklistByTagPage() {
                 const previousNc = previousNcMap[question.id];
                 const recurrenceStatus = recurrenceDecisions[question.id];
                 const isRecurrence = Boolean(previousNc);
+                const previousPhotos = getAnswerPhotoUrls(previousNc);
+                const photoRule = resolvePhotoRule(question);
+                const draftPhotos = answers[question.id]?.photos ?? [];
+                const isNc = answers[question.id]?.response === "nc";
+                const requirePhoto = photoRule === "required_nc";
+                const allowPhotos = photoRule !== "none";
+                const missingRequiredPhoto = requirePhoto && isNc && draftPhotos.length === 0;
 
                 return (
                   <div key={question.id} className="rounded-lg border border-[var(--border)] p-4">
@@ -684,15 +837,27 @@ export default function ChecklistByTagPage() {
                             Observação anterior: <span className="text-amber-800">{previousNc.observation}</span>
                           </p>
                         )}
-                        {previousNc?.photoUrl && (
-                          <a
-                            href={previousNc.photoUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex text-xs font-medium text-amber-800 underline"
-                          >
-                            Ver evidência anterior
-                          </a>
+                        {previousPhotos.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {previousPhotos.map((photoUrl, photoIndex) => (
+                              <a
+                                key={`${question.id}-previous-${photoIndex}-${photoUrl}`}
+                                href={photoUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="group relative block h-20 w-28 overflow-hidden rounded-md border border-amber-400/60"
+                              >
+                                <img
+                                  src={photoUrl}
+                                  alt={`Foto ${photoIndex + 1} da última não conformidade desta pergunta`}
+                                  className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                />
+                                <span className="absolute inset-x-0 bottom-0 bg-amber-900/80 px-1 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide text-amber-50">
+                                  Foto anterior
+                                </span>
+                              </a>
+                            ))}
+                          </div>
                         )}
                         <div className="mt-1 flex flex-wrap gap-3 text-xs sm:text-sm">
                           <label className="inline-flex items-center gap-2">
@@ -766,6 +931,64 @@ export default function ChecklistByTagPage() {
                           className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--hint)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                         />
                       </div>
+
+                      {allowPhotos && (
+                        <div className="space-y-2">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <label className="text-sm font-medium text-[var(--hint)]">
+                              {requirePhoto
+                                ? "Fotos (obrigatório em caso de NC)"
+                                : "Fotos (opcional)"}
+                            </label>
+                            {missingRequiredPhoto && (
+                              <span className="text-xs font-semibold text-[var(--danger)]">
+                                Adicione ao menos uma foto quando marcar NC.
+                              </span>
+                            )}
+                          </div>
+
+                          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center text-sm text-[var(--hint)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="sr-only"
+                              onChange={(event) => {
+                                addPhotos(question.id, event.target.files);
+                                event.target.value = "";
+                              }}
+                            />
+                            <span className="font-semibold">Adicionar fotos</span>
+                            <span className="text-xs text-[var(--muted)]">
+                              Selecione uma ou mais imagens (.jpg, .png, .webp)
+                            </span>
+                          </label>
+
+                          {draftPhotos.length > 0 && (
+                            <div className="flex flex-wrap gap-3">
+                              {draftPhotos.map((photo, photoIndex) => (
+                                <div
+                                  key={photo.id}
+                                  className="relative h-24 w-32 overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]"
+                                >
+                                  <img
+                                    src={photo.previewUrl}
+                                    alt={`Pré-visualização da foto ${photoIndex + 1} da pergunta ${question.text}`}
+                                    className="h-full w-full object-cover"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removePhoto(question.id, photo.id)}
+                                    className="absolute right-1.5 top-1.5 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow hover:bg-black/90"
+                                  >
+                                    Remover
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
