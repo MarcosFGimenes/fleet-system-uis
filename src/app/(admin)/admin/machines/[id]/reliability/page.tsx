@@ -31,6 +31,20 @@ const severityWeight: Record<string, number> = {
   alta: 3,
 };
 
+type ResolutionPoint = {
+  severity: string;
+  severityWeight: number;
+  resolution: number;
+  title: string;
+};
+
+type IdlePoint = {
+  idle: number;
+  severityWeight: number;
+  severity: string;
+  title: string;
+};
+
 const severityLabel: Record<string, string> = {
   baixa: "Baixa",
   media: "Média",
@@ -142,9 +156,9 @@ export default function AssetReliabilityPage() {
     };
   }, [records]);
 
-  const resolutionScatter = useMemo(() =>
+  const resolutionScatter = useMemo<ResolutionPoint[]>(() =>
     records
-      .map((record) => {
+      \.map((record) => {
         const completed = record.actions?.find((action) => action.type === "corretiva" && action.completedAt);
         return {
           severity: severityLabel[record.severity ?? "media"],
@@ -153,13 +167,13 @@ export default function AssetReliabilityPage() {
           title: record.title,
         };
       })
-      .filter((point) => point.resolution > 0),
+            .filter((point): point is ResolutionPoint => point.resolution > 0),
   [records]);
 
-  const idleScatter = useMemo(() =>
+  const idleScatter = useMemo<IdlePoint[]>(() =>
     records
       .filter((record) => typeof record.telemetryRef?.idleTimeH === "number")
-      .map((record) => ({
+            .map((record) => ({
         idle: record.telemetryRef?.idleTimeH ?? 0,
         severityWeight: severityWeight[record.severity ?? "media"],
         severity: severityLabel[record.severity ?? "media"],
@@ -245,10 +259,7 @@ export default function AssetReliabilityPage() {
                 <CartesianGrid stroke="#e5e7eb" />
                 <XAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "Média", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
                 <YAxis type="number" dataKey="resolution" name="Horas" />
-                <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number, _name, item) => [
-                  `${(value as number).toFixed(1)} h`,
-                  (item?.payload as any)?.title ?? "",
-                ]} />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number | string, _name, item) => { const numericValue = typeof value === "number" ? value : Number(value); const formatted = Number.isFinite(numericValue) ? numericValue.toFixed(1) : "0.0"; const payload = item?.payload as ResolutionPoint | undefined; return [`${formatted} h`, payload?.title ?? ""]; }} />
                 <Legend />
                 <Scatter name="NCs" data={resolutionScatter} fill="#2563eb" />
               </ScatterChart>
@@ -267,10 +278,7 @@ export default function AssetReliabilityPage() {
                 <CartesianGrid stroke="#e5e7eb" />
                 <XAxis type="number" dataKey="idle" name="Ralenti (h)" />
                 <YAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "Média", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
-                <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number, _name, item) => [
-                  (value as number).toFixed(1),
-                  (item?.payload as any)?.title ?? "",
-                ]} />
+                <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number | string, _name, item) => { const numericValue = typeof value === "number" ? value : Number(value); const formatted = Number.isFinite(numericValue) ? numericValue.toFixed(1) : "0.0"; const payload = item?.payload as IdlePoint | undefined; return [formatted, payload?.title ?? ""]; }} />
                 <Legend />
                 <Scatter name="NCs" data={idleScatter} fill="#10b981" />
               </ScatterChart>
@@ -348,4 +356,7 @@ export default function AssetReliabilityPage() {
     </div>
   );
 }
+
+
+
 
