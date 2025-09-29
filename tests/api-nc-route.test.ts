@@ -1,5 +1,10 @@
 import { NextRequest } from "next/server";
-import { Timestamp, type FirebaseFirestore } from "firebase-admin/firestore";
+import {
+  Timestamp,
+  type WhereFilterOp,
+  type OrderByDirection,
+} from "firebase-admin/firestore";
+
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { GET } from "@/app/api/nc/route";
@@ -29,6 +34,8 @@ type ResponseDoc = {
 };
 
 class FakeResponseQuery {
+  static triggerMissingIndexOnce = false;
+
   constructor(
     private readonly docs: ResponseDoc[],
     private readonly filters: Filter[] = [],
@@ -37,14 +44,16 @@ class FakeResponseQuery {
     private readonly limitValue?: number,
   ) {}
 
-  where(field: string, op: FirebaseFirestore.WhereFilterOp, value: unknown) {
+  where(field: string, op: WhereFilterOp, value: unknown) {
+
     if (op !== "==" && op !== ">=" && op !== "<=") {
       throw new Error(`Unsupported operator ${op}`);
     }
     return new FakeResponseQuery(this.docs, [...this.filters, { field, op, value }], this.orderByField, this.orderDirection, this.limitValue);
   }
 
-  orderBy(field: string, direction: FirebaseFirestore.OrderByDirection = "desc") {
+  orderBy(field: string, direction: OrderByDirection = "desc") {
+
     return new FakeResponseQuery(this.docs, this.filters, field, direction, this.limitValue);
   }
 
@@ -53,6 +62,13 @@ class FakeResponseQuery {
   }
 
   async get() {
+    if (FakeResponseQuery.triggerMissingIndexOnce) {
+      FakeResponseQuery.triggerMissingIndexOnce = false;
+      const error = new Error("missing index for createdAtTs");
+      (error as { code?: unknown }).code = "FAILED_PRECONDITION";
+      throw error;
+    }
+
     let results = this.docs.slice();
 
     for (const filter of this.filters) {
@@ -103,9 +119,10 @@ class FakeTemplateCollection {
   constructor(private readonly templates: Map<string, Record<string, unknown>>) {}
 
   doc(id: string) {
+    const { templates } = this;
     return {
       async get() {
-        const data = this.templates.get(id);
+        const data = templates.get(id);
         return {
           exists: Boolean(data),
           data: () => data,
@@ -161,6 +178,8 @@ const baseResponse = {
 };
 
 beforeEach(() => {
+  FakeResponseQuery.triggerMissingIndexOnce = false;
+
   currentDb = createDb([baseResponse], new Map([["tpl-1", baseTemplate]]));
 });
 
@@ -206,5 +225,14 @@ describe("GET /api/nc", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.data[0].evidenceStatus).toBe("missing_required_photo");
+  });
+
+  it("falls back to unindexed query when Firestore reports missing index", async () => {
+    FakeResponseQuery.triggerMissingIndexOnce = true;
+    const request = new NextRequest("http://localhost/api/nc");
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.data).toHaveLength(1);
   });
 });

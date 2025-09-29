@@ -68,6 +68,17 @@ type NormalizedNcWithMeta = NormalizedNc & { sortKey: number };
 
 const MAX_RESPONSE_FETCH = 500;
 
+function isMissingIndexError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  if (code !== "FAILED_PRECONDITION" && code !== 9) {
+    return false;
+  }
+  const message = (error as { message?: unknown }).message;
+  if (typeof message !== "string") return false;
+  return message.toLowerCase().includes("index");
+}
+
 const querySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
@@ -108,6 +119,7 @@ function sanitizeString(value: unknown): string | null {
   const trimmed = value.trim();
   return trimmed || null;
 }
+
 
 function normalizePhotoUrls(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -265,15 +277,40 @@ export async function GET(request: NextRequest) {
       Math.max(page * pageSize + pageSize, pageSize * 2),
     );
 
-    const snapshot = await timestampQuery.limit(fetchLimit).get();
+    let responseDocs = [] as {
+      id: string;
+      data: ChecklistResponseDoc;
+      createTime: Timestamp | null;
+    }[];
+    let usedIndexFallback = false;
 
-    const responseDocs = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      data: doc.data() as ChecklistResponseDoc,
-      createTime: doc.createTime ?? null,
-    }));
+    try {
+      const snapshot = await timestampQuery.limit(fetchLimit).get();
+      responseDocs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        data: doc.data() as ChecklistResponseDoc,
+        createTime: doc.createTime ?? null,
+      }));
+    } catch (error) {
+      if (!isMissingIndexError(error)) {
+        throw error;
+      }
 
-    if ((from || to) && responseDocs.length < fetchLimit) {
+      usedIndexFallback = true;
+      console.warn(
+        "Falling back to unindexed checklistResponses query; createdAtTs index missing",
+        error,
+      );
+      const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
+      responseDocs = fallbackSnapshot.docs.map((doc) => ({
+        id: doc.id,
+        data: doc.data() as ChecklistResponseDoc,
+        createTime: doc.createTime ?? null,
+      }));
+    }
+
+    if ((from || to) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
+
       // Some legacy responses may only have string-based createdAt values.
       // Fetch an extra window without timestamp filters and rely on in-memory filtering.
       const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
