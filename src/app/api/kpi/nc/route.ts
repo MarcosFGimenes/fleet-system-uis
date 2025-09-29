@@ -1,6 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { adminDb } from "@/lib/firebase-admin";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
 import {
   calcAvgContainmentHours,
@@ -65,9 +64,11 @@ function buildSeverityBySystem(records: NonConformity[]) {
 
 export async function GET() {
   try {
-    const snapshot = await getDocs(
-      query(collection(db, "nonConformities"), orderBy("createdAt", "desc"), limit(MAX_FETCH)),
-    );
+    const snapshot = await adminDb
+      .collection("nonConformities")
+      .orderBy("createdAt", "desc")
+      .limit(MAX_FETCH)
+      .get();
 
     const records = snapshot.docs.map((docSnap) => mapNonConformityDoc(docSnap));
     const now = new Date();

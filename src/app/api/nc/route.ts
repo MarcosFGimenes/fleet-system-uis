@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { adminDb } from "@/lib/firebase-admin";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
 import type { Severity } from "@/types/nonconformity";
 import { matchesFilters } from "./filters";
@@ -39,13 +38,11 @@ export async function GET(request: NextRequest) {
     const dateTo = normalizeParam(params.get("dateTo"));
     const queryText = normalizeParam(params.get("q"));
 
-    const baseQuery = query(
-      collection(db, "nonConformities"),
-      orderBy("createdAt", "desc"),
-      limit(MAX_FETCH),
-    );
-
-    const snapshot = await getDocs(baseQuery);
+    const snapshot = await adminDb
+      .collection("nonConformities")
+      .orderBy("createdAt", "desc")
+      .limit(MAX_FETCH)
+      .get();
     const records = snapshot.docs.map((docSnap) => mapNonConformityDoc(docSnap));
 
     const filtered = records.filter((record) =>
