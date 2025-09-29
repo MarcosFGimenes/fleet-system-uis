@@ -11,6 +11,7 @@ import {
   ChecklistResponse,
   ChecklistTemplate,
   ChecklistNonConformityTreatment,
+  ChecklistExtraNonConformity,
   NonConformityStatus,
 } from "@/types/checklist";
 
@@ -24,6 +25,23 @@ const getAnswerPhotos = (answer: ChecklistResponse["answers"][number]) => {
 type Params = {
   id: string;
 };
+
+type QuestionNonConformityItem = {
+  key: string;
+  type: "question";
+  answer: ChecklistResponse["answers"][number];
+  title: string;
+  photos: string[];
+};
+
+type ExtraNonConformityItem = {
+  key: string;
+  type: "extra";
+  extra: ChecklistExtraNonConformity;
+  title: string;
+};
+
+type NonConformityItem = QuestionNonConformityItem | ExtraNonConformityItem;
 
 export default function ResponseDetailPage() {
   const { id } = useParams<Params>();
@@ -144,33 +162,52 @@ export default function ResponseDetailPage() {
   const questionText = (questionId: string) =>
     template?.questions.find((question) => question.id === questionId)?.text ?? questionId;
 
-  const nonConformities = response.answers.filter((answer) => answer.response === "nc");
+  const questionNonConformities: QuestionNonConformityItem[] = response.answers
+    .filter((answer) => answer.response === "nc")
+    .map((answer) => ({
+      key: answer.questionId,
+      type: "question" as const,
+      answer,
+      title: questionText(answer.questionId),
+      photos: getAnswerPhotos(answer),
+    }));
 
-  const getTreatment = (questionId: string): ChecklistNonConformityTreatment => {
-    const existing = treatmentDrafts[questionId];
+  const extraNonConformities: ExtraNonConformityItem[] = (response.extraNonConformities ?? []).map(
+    (extra, index) => ({
+      key: `extra:${index}`,
+      type: "extra" as const,
+      extra,
+      title: extra.title?.trim() || `NC adicional ${index + 1}`,
+    }),
+  );
+
+  const nonConformityItems: NonConformityItem[] = [
+    ...questionNonConformities,
+    ...extraNonConformities,
+  ];
+
+  const getTreatment = (itemKey: string): ChecklistNonConformityTreatment => {
+    const existing = treatmentDrafts[itemKey];
     if (existing) {
       return existing;
     }
 
     return {
-      questionId,
+      questionId: itemKey,
       status: "open",
     } satisfies ChecklistNonConformityTreatment;
   };
 
-  const updateTreatmentDraft = (
-    questionId: string,
-    patch: Partial<ChecklistNonConformityTreatment>,
-  ) => {
+  const updateTreatmentDraft = (itemKey: string, patch: Partial<ChecklistNonConformityTreatment>) => {
     setTreatmentDrafts((prev) => {
-      const current = prev[questionId] ?? {
-        questionId,
+      const current = prev[itemKey] ?? {
+        questionId: itemKey,
         status: "open" as NonConformityStatus,
       };
 
       return {
         ...prev,
-        [questionId]: {
+        [itemKey]: {
           ...current,
           ...patch,
         },
@@ -187,9 +224,9 @@ export default function ResponseDetailPage() {
     setFeedbackMessage(null);
 
     try {
-      const toPersist = nonConformities
-        .map((answer) => {
-          const draft = getTreatment(answer.questionId);
+      const toPersist = nonConformityItems
+        .map((item) => {
+          const draft = getTreatment(item.key);
           return {
             ...draft,
             status: draft.status ?? "open",
@@ -236,19 +273,19 @@ export default function ResponseDetailPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 px-4 sm:px-0">
+    <div className="max-w-5xl mx-auto space-y-6 px-4 sm:px-0 text-[var(--text)]">
       <header className="space-y-2">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Detalhes do Checklist</h1>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-[var(--hint)]">
               Enviado em {new Date(response.createdAt).toLocaleString()}
             </p>
           </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <button
               onClick={() => router.back()}
-              className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-gray-500 hover:bg-[var(--surface)]"
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text)] transition hover:border-[var(--primary)] hover:bg-[var(--primary-50)]"
             >
               Voltar
             </button>
@@ -264,12 +301,12 @@ export default function ResponseDetailPage() {
         </div>
       </header>
 
-      <section className="rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg shadow-slate-900/5">
         <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Máquina</p>
-            <p className="mt-1 text-lg font-semibold text-white">{machine?.modelo ?? response.machineId}</p>
-            <dl className="mt-2 space-y-1 text-xs text-gray-400">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">Máquina</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--text)]">{machine?.modelo ?? response.machineId}</p>
+            <dl className="mt-2 space-y-1 text-xs text-[var(--hint)]">
               <div className="flex justify-between">
                 <dt>TAG</dt>
                 <dd>{machine?.tag ?? "-"}</dd>
@@ -280,39 +317,81 @@ export default function ResponseDetailPage() {
               </div>
             </dl>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Operador</p>
-            <p className="mt-1 text-lg font-semibold text-white">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">Operador</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--text)]">
               {response.operatorNome ?? "Não informado"}
             </p>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-[var(--hint)]">
               Matrícula: {response.operatorMatricula ?? "-"}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Template</p>
-            <p className="mt-1 text-lg font-semibold text-white">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">Template</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--text)]">
               {template?.title ?? response.templateId}
             </p>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-[var(--hint)]">
               {template ? `${template.type} · versão ${template.version}` : ""}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Leituras</p>
-            <p className="mt-1 text-lg font-semibold text-white">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">Leituras</p>
+            <p className="mt-1 text-lg font-semibold text-[var(--text)]">
               {response.km != null ? `KM ${response.km}` : "-"}
               {response.km != null && response.horimetro != null ? " · " : ""}
               {response.horimetro != null ? `Hor ${response.horimetro}` : ""}
             </p>
           </div>
         </div>
+
+        {response.extraNonConformities && response.extraNonConformities.length > 0 && (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--hint)]">
+              Não conformidades adicionais registradas
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              {response.extraNonConformities.map((extra, index) => (
+                <article
+                  key={`extra-${index}-${extra.title ?? "nc"}`}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4"
+                >
+                  <p className="text-sm font-semibold text-[var(--text)]">
+                    {index + 1}. {extra.title?.trim() || "NC adicional"}
+                  </p>
+                  {extra.description && (
+                    <p className="mt-2 text-sm text-[var(--hint)]">
+                      Descrição: <span className="text-[var(--text)]">{extra.description}</span>
+                    </p>
+                  )}
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
+                    {extra.severity && (
+                      <span className="inline-flex items-center rounded-full bg-amber-200 px-2.5 py-1 text-amber-900">
+                        Severidade: {extra.severity}
+                      </span>
+                    )}
+                    {extra.safetyRisk && (
+                      <span className="inline-flex items-center rounded-full bg-red-200 px-2.5 py-1 text-red-900">
+                        Risco de segurança
+                      </span>
+                    )}
+                    {extra.impactAvailability && (
+                      <span className="inline-flex items-center rounded-full bg-blue-200 px-2.5 py-1 text-blue-900">
+                        Impacto na disponibilidade
+                      </span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
-      {nonConformities.length > 0 && (
-        <section className="space-y-4 rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
+      {nonConformityItems.length > 0 && (
+        <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg shadow-slate-900/5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold text-white">Tratativas de não conformidade</h2>
+            <h2 className="text-lg font-semibold">Tratativas de não conformidade</h2>
             <button
               onClick={handleSaveTreatments}
               disabled={saveStatus === "saving"}
@@ -321,8 +400,8 @@ export default function ResponseDetailPage() {
               {saveStatus === "saving" ? "Salvando..." : "Salvar tratativas"}
             </button>
           </div>
-          <p className="text-sm text-gray-400">
-            Registre as ações planejadas para cada não conformidade identificada neste checklist.
+          <p className="text-sm text-[var(--hint)]">
+            Registre as ações planejadas para cada uma das {nonConformityItems.length} não conformidades identificadas neste checklist.
           </p>
           {feedbackMessage && (
             <div
@@ -336,57 +415,83 @@ export default function ResponseDetailPage() {
             </div>
           )}
           <div className="space-y-4">
-          {nonConformities.map((answer, index) => {
-            const treatment = getTreatment(answer.questionId);
-            const photos = getAnswerPhotos(answer);
+            {nonConformityItems.map((item, index) => {
+              const treatment = getTreatment(item.key);
 
               return (
                 <div
-                  key={answer.questionId}
-                  className="flex flex-col gap-4 rounded-xl border border-red-700/40 bg-red-900/20 p-4"
+                  key={item.key}
+                  className="flex flex-col gap-4 rounded-xl border border-red-200 bg-red-50 p-4"
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="font-semibold text-white">
-                        {index + 1}. {questionText(answer.questionId)}
+                      <p className="font-semibold">
+                        {index + 1}. {item.title}
                       </p>
-                      <span className="mt-1 inline-flex items-center rounded-full bg-red-700 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
+                      <span className="mt-1 inline-flex items-center rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-white">
                         NC identificado
                       </span>
-                      {answer.recurrence && (
+                      {item.type === "question" && item.answer.recurrence && (
                         <span
                           className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${
-                            answer.recurrence.status === "still_nc"
-                              ? "bg-amber-400 text-black"
-                              : "bg-emerald-600 text-white"
+                            item.answer.recurrence.status === "still_nc"
+                              ? "bg-amber-200 text-amber-900"
+                              : "bg-emerald-200 text-emerald-900"
                           }`}
                         >
                           Reincidência ·
                           {" "}
-                          {answer.recurrence.status === "still_nc"
+                          {item.answer.recurrence.status === "still_nc"
                             ? "Permanece em NC"
                             : "Informada como resolvida"}
                         </span>
                       )}
-                      {answer.observation && (
-                        <p className="mt-3 text-sm text-gray-200">
-                          Observações do operador: <span className="text-[var(--muted)]">{answer.observation}</span>
+                      {item.type === "question" && item.answer.observation && (
+                        <p className="mt-3 text-sm text-[var(--hint)]">
+                          Observações do operador:{" "}
+                          <span className="text-[var(--text)]">{item.answer.observation}</span>
                         </p>
                       )}
+                      {item.type === "extra" && (
+                        <div className="mt-3 space-y-2 text-sm text-[var(--hint)]">
+                          {item.extra.description && (
+                            <p>
+                              Descrição: <span className="text-[var(--text)]">{item.extra.description}</span>
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            {item.extra.severity && (
+                              <span className="inline-flex items-center rounded-full bg-amber-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900">
+                                Severidade: {item.extra.severity}
+                              </span>
+                            )}
+                            {item.extra.safetyRisk && (
+                              <span className="inline-flex items-center rounded-full bg-red-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-red-900">
+                                Risco de segurança
+                              </span>
+                            )}
+                            {item.extra.impactAvailability && (
+                              <span className="inline-flex items-center rounded-full bg-blue-200 px-2.5 py-1 text-xs font-semibold uppercase tracking-wide text-blue-900">
+                                Impacto na disponibilidade
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    {photos.length > 0 && (
+                    {item.type === "question" && item.photos.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-3 sm:mt-0 sm:justify-end">
-                        {photos.map((photoUrl, photoIndex) => (
+                        {item.photos.map((photoUrl, photoIndex) => (
                           <a
-                            key={`${answer.questionId}-photo-${photoIndex}-${photoUrl}`}
+                            key={`${item.answer.questionId}-photo-${photoIndex}-${photoUrl}`}
                             href={photoUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-white/10"
+                            className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-[var(--border)] bg-black/5"
                           >
                             <img
                               src={photoUrl}
-                              alt={`Foto ${photoIndex + 1} da questão ${questionText(answer.questionId)}`}
+                              alt={`Foto ${photoIndex + 1} da questão ${item.title}`}
                               className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
                             />
                             <span className="absolute inset-x-0 bottom-0 bg-black/60 px-1.5 py-0.5 text-center text-[10px] uppercase tracking-wide text-white">
@@ -400,53 +505,53 @@ export default function ResponseDetailPage() {
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="flex flex-col gap-2 text-sm">
-                      <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                      <span className="text-xs uppercase tracking-wide text-[var(--hint)]">
                         Tratativa planejada
                       </span>
                       <textarea
                         value={treatment.summary ?? ""}
                         onChange={(event) =>
-                          updateTreatmentDraft(answer.questionId, {
+                          updateTreatmentDraft(item.key, {
                             summary: event.target.value,
                           })
                         }
                         placeholder="Descreva a ação corretiva e preventiva"
-                        className="min-h-[96px] resize-y rounded-lg border border-gray-700 bg-[var(--surface)] p-3 text-sm text-white placeholder:text-gray-500 focus:border-[var(--primary)] focus:outline-none"
+                        className="min-h-[96px] resize-y rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 text-sm text-[var(--text)] placeholder:text-[var(--hint)] focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                       />
                     </label>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <label className="flex flex-col gap-2 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-[var(--hint)]">
                           Responsável
                         </span>
                         <input
                           value={treatment.responsible ?? ""}
                           onChange={(event) =>
-                            updateTreatmentDraft(answer.questionId, {
+                            updateTreatmentDraft(item.key, {
                               responsible: event.target.value,
                             })
                           }
                           placeholder="Nome do responsável"
-                          className="rounded-lg border border-gray-700 bg-[var(--surface)] px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-[var(--primary)] focus:outline-none"
+                          className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--hint)] focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                         />
                       </label>
                       <label className="flex flex-col gap-2 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-[var(--hint)]">
                           Prazo
                         </span>
                         <input
                           type="date"
                           value={treatment.deadline ?? ""}
                           onChange={(event) =>
-                            updateTreatmentDraft(answer.questionId, {
+                            updateTreatmentDraft(item.key, {
                               deadline: event.target.value || undefined,
                             })
                           }
-                          className="rounded-lg border border-gray-700 bg-[var(--surface)] px-3 py-2 text-sm text-white focus:border-[var(--primary)] focus:outline-none"
+                          className="rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
                         />
                       </label>
                       <label className="flex flex-col gap-2 text-sm sm:col-span-2">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-[var(--hint)]">
                           Status
                         </span>
                         <div className="flex flex-wrap gap-2">
@@ -455,14 +560,14 @@ export default function ResponseDetailPage() {
                               key={status}
                               type="button"
                               onClick={() =>
-                                updateTreatmentDraft(answer.questionId, {
+                                updateTreatmentDraft(item.key, {
                                   status,
                                 })
                               }
                               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                                 treatment.status === status
                                   ? "bg-blue-600 text-white"
-                                  : "bg-[var(--surface)] text-[var(--muted)] hover:bg-gray-700"
+                                  : "bg-[var(--card)] text-[var(--muted)] hover:bg-[var(--primary-50)]"
                               }`}
                             >
                               {statusLabel[status]}
@@ -479,8 +584,8 @@ export default function ResponseDetailPage() {
         </section>
       )}
 
-      <section className="space-y-4 rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
-        <h2 className="text-lg font-semibold text-white">Respostas do checklist</h2>
+      <section className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-lg shadow-slate-900/5">
+        <h2 className="text-lg font-semibold">Respostas do checklist</h2>
         <div className="grid grid-cols-1 gap-4">
           {response.answers.map((answer, index) => {
             const photos = getAnswerPhotos(answer);
@@ -488,11 +593,11 @@ export default function ResponseDetailPage() {
             return (
               <article
                 key={answer.questionId}
-                className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4 transition hover:border-gray-500"
+                className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 transition hover:border-[var(--primary)]/60"
               >
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className="text-sm font-semibold text-[var(--text)]">
                       {index + 1}. {questionText(answer.questionId)}
                     </p>
                     <span
@@ -511,7 +616,9 @@ export default function ResponseDetailPage() {
                         : "Não se aplica"}
                     </span>
                     {answer.observation && (
-                      <p className="text-sm text-[var(--muted)]">Observações: {answer.observation}</p>
+                      <p className="text-sm text-[var(--hint)]">
+                        Observações: <span className="text-[var(--text)]">{answer.observation}</span>
+                      </p>
                     )}
                   </div>
                   {photos.length > 0 && (
@@ -522,7 +629,7 @@ export default function ResponseDetailPage() {
                           href={photoUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-white/10"
+                          className="group relative block h-24 w-32 overflow-hidden rounded-lg border border-[var(--border)] bg-black/5"
                         >
                           <img
                             src={photoUrl}
