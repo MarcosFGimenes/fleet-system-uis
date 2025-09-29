@@ -175,8 +175,8 @@ export default function AnalyticsPage() {
 
     return [
       { name: "Conforme (OK)", value: ok },
-      { name: "Não Conforme (NC)", value: nc },
-      { name: "Não se Aplica (NA)", value: na },
+      { name: "Nao Conforme (NC)", value: nc },
+      { name: "Nao Aplica (NA)", value: na },
     ];
   }, [rows]);
 
@@ -296,7 +296,7 @@ export default function AnalyticsPage() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+    <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
       <h3 className="text-lg font-semibold mb-3">{title}</h3>
       {children}
     </div>
@@ -305,11 +305,10 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function KpiCard({ title, value, hint }: { title: string; value: string | number; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+    <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
       <p className="text-sm text-gray-400">{title}</p>
       <p className="text-3xl font-bold mt-1">{value}</p>
       {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
     </div>
   );
 }
-

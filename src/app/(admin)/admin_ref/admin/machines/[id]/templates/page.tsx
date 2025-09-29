@@ -93,7 +93,7 @@ export default function MachineTemplatesLinkPage() {
 
   if (loading) {
     return (
-      <div className="grid place-items-center min-h-[200px] text-[var(--muted)]">
+      <div className="grid place-items-center min-h-[200px] text-gray-300">
         Carregando...
       </div>
     );
@@ -101,7 +101,7 @@ export default function MachineTemplatesLinkPage() {
 
   if (!machine) {
     return (
-      <div className="grid place-items-center min-h-[200px] text-[var(--muted)]">
+      <div className="grid place-items-center min-h-[200px] text-gray-300">
         Máquina não encontrada.
       </div>
     );
@@ -113,13 +113,13 @@ export default function MachineTemplatesLinkPage() {
         <h1 className="text-2xl font-bold">Vincular Templates</h1>
         <p className="text-sm text-gray-400">
           Máquina: <strong>{machine.modelo}</strong> — TAG:{" "}
-          <code className="bg-[var(--surface)] px-2 py-1 rounded border border-gray-700">
+          <code className="bg-gray-800 px-2 py-1 rounded border border-gray-700">
             {machine.tag}
           </code>
         </p>
       </header>
 
-      <section className="bg-[var(--surface)] p-4 rounded-xl space-y-2">
+      <section className="bg-gray-800 p-4 rounded-xl space-y-2">
         {templates.length === 0 && (
           <p className="text-sm text-gray-400">Nenhum template cadastrado.</p>
         )}
@@ -128,7 +128,7 @@ export default function MachineTemplatesLinkPage() {
           {templates.map((template) => (
             <li
               key={template.id}
-              className="flex items-center justify-between p-3 bg-[var(--surface)] rounded-lg border border-gray-700"
+              className="flex items-center justify-between p-3 bg-gray-900 rounded-lg border border-gray-700"
             >
               <div>
                 <p className="font-medium">

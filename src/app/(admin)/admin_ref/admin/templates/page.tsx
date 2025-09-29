@@ -78,7 +78,7 @@ export default function TemplatesAdminPage() {
       </header>
 
       {ui.mode === "create" && (
-        <div className="bg-[var(--surface)] p-6 rounded-xl">
+        <div className="bg-gray-800 p-6 rounded-xl">
           <h2 className="text-lg font-semibold mb-4">Cadastrar Template</h2>
           <TemplateForm
             onSubmit={handleCreate}
@@ -88,7 +88,7 @@ export default function TemplatesAdminPage() {
       )}
 
       {ui.mode === "edit" && ui.selected && (
-        <div className="bg-[var(--surface)] p-6 rounded-xl">
+        <div className="bg-gray-800 p-6 rounded-xl">
           <h2 className="text-lg font-semibold mb-4">Editar Template</h2>
           <TemplateForm
             initial={ui.selected}
@@ -99,7 +99,7 @@ export default function TemplatesAdminPage() {
       )}
 
       {ui.mode === "list" && (
-        <div className="bg-[var(--surface)] rounded-xl overflow-hidden">
+        <div className="bg-gray-800 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-gray-700">
               <tr>

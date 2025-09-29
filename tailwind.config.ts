@@ -1,31 +1,18 @@
-import type { Config } from "tailwindcss";
+﻿import type { Config } from "tailwindcss";
 
-const config: Config = {
-  content: ["./src/**/*.{js,jsx,ts,tsx,mdx}"],
+export default {
+  content: ["./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
-      colors: {
-        background: {
-          DEFAULT: "#f9fafb",
-          subtle: "#f3f4f6",
-        },
-        foreground: {
-          DEFAULT: "#111827",
-          muted: "#4b5563",
-        },
-        border: {
-          DEFAULT: "#e5e7eb",
-        },
-        focus: {
-          DEFAULT: "#2563eb",
-        },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        card: "0 1px 2px rgba(15, 23, 42, 0.08), 0 10px 15px -10px rgba(15, 23, 42, 0.2)",
+        "sm-soft": "0 1px 2px rgba(16,24,40,.06)",
+        "md-soft": "0 4px 12px rgba(16,24,40,.08)",
       },
     },
   },
   plugins: [],
-};
+} satisfies Config;
 
-export default config;

@@ -53,7 +53,7 @@ export default function MachinesAdminPage() {
   };
 
   const handleDelete = async (machine: Machine) => {
-    if (!confirm(`Excluir maquina ${machine.modelo}?`)) {
+    if (!confirm(`Excluir máquina ${machine.modelo}?`)) {
       return;
     }
     await deleteDoc(doc(db, "machines", machine.id));
@@ -64,146 +64,160 @@ export default function MachinesAdminPage() {
     `${window.location.origin}/checklist/${encodeURIComponent(machine.tag)}`;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <header className="flex items-center justify-between">
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Máquinas</h1>
-          <p className="text-sm text-gray-400">Gerencie frota, TAGs e templates vinculados.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Máquinas</h1>
+          <p className="text-sm text-[var(--muted)]">
+            Gerencie frota, TAGs e templates vinculados.
+          </p>
         </div>
         {ui.mode === "list" && (
           <button
             onClick={() => setUi({ mode: "create" })}
-            className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-700"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm-soft transition hover:bg-[var(--primary-700)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2"
           >
-            Nova Máquina
+            Nova máquina
           </button>
         )}
       </header>
 
       {ui.mode === "create" && (
-        <div className="bg-gray-800 p-6 rounded-xl">
-          <h2 className="text-lg font-semibold mb-4">Cadastrar Máquina</h2>
-          <MachineForm
-            onSubmit={handleCreate}
-            onCancel={() => setUi({ mode: "list" })}
-          />
-        </div>
+        <section className="light-card space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Cadastrar máquina</h2>
+            <p className="text-sm text-[var(--muted)]">
+              Informe os dados do equipamento para gerar o QR Code automaticamente.
+            </p>
+          </div>
+          <MachineForm onSubmit={handleCreate} onCancel={() => setUi({ mode: "list" })} />
+        </section>
       )}
 
       {ui.mode === "edit" && ui.selected && (
-        <div className="bg-gray-800 p-6 rounded-xl">
-          <h2 className="text-lg font-semibold mb-4">Editar Máquina</h2>
+        <section className="light-card space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Editar máquina</h2>
+            <p className="text-sm text-[var(--muted)]">
+              Atualize as informações antes de salvar.
+            </p>
+          </div>
           <MachineForm
             initial={ui.selected}
             onSubmit={(data) => handleUpdate(ui.selected!, data)}
             onCancel={() => setUi({ mode: "list" })}
           />
-        </div>
+        </section>
       )}
 
       {ui.mode === "qr" && ui.selected && (
-        <div className="bg-gray-800 p-6 rounded-xl space-y-6">
-          <div>
+        <section className="light-card space-y-6">
+          <div className="space-y-1">
             <h2 className="text-lg font-semibold">
               QR Code — {ui.selected.modelo} ({ui.selected.tag})
             </h2>
-            <p className="text-sm text-gray-400">
-              Baixe o QR Code para colar na máquina. O link aponta para o checklist da TAG.
+            <p className="text-sm text-[var(--muted)]">
+              Baixe o QR Code e fixe na máquina para acesso rápido ao checklist correspondente.
             </p>
           </div>
-          <div className="flex flex-col md:flex-row md:items-center gap-8">
+          <div className="flex flex-col gap-8 md:flex-row md:items-center">
             <QrCodeGenerator
               value={qrValueFor(ui.selected)}
               label={`TAG: ${ui.selected.tag}`}
               fileName={`qr-${ui.selected.tag}`}
             />
-            <div className="text-sm text-gray-300 space-y-2">
+            <div className="space-y-3 text-sm text-[var(--muted)]">
               <p>
                 <strong>URL codificada no QR:</strong>
               </p>
-              <code className="block break-all text-xs bg-gray-900 px-2 py-1 rounded-md border border-gray-700">
+              <code className="block break-all rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text)]">
                 {qrValueFor(ui.selected)}
               </code>
-              <p className="text-xs text-gray-400">
-                Cole este QR no equipamento. Ao escanear, o operador abre o checklist correspondente.
+              <p className="text-xs text-[var(--hint)]">
+                Ao escanear, o operador abre diretamente o checklist da TAG vinculada ao equipamento.
               </p>
             </div>
           </div>
           <div className="flex justify-end">
             <button
               onClick={() => setUi({ mode: "list" })}
-              className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600"
+              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--primary-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
             >
-              Voltar
+              Voltar para lista
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       {ui.mode === "list" && (
-        <div className="bg-gray-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="text-left px-4 py-3">Modelo</th>
-                <th className="text-left px-4 py-3">Placa</th>
-                <th className="text-left px-4 py-3">Setor</th>
-                <th className="text-left px-4 py-3">TAG</th>
-                <th className="text-right px-4 py-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {machines.map((machine) => (
-                <tr key={machine.id} className="border-t border-gray-700">
-                  <td className="px-4 py-3">{machine.modelo}</td>
-                  <td className="px-4 py-3">{machine.placa ?? "-"}</td>
-                  <td className="px-4 py-3">{machine.setor}</td>
-                  <td className="px-4 py-3">
-                    <code className="text-xs bg-gray-900 px-2 py-1 rounded-md border border-gray-700">
-                      {machine.tag}
-                    </code>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => router.push(`/machines/${machine.id}/templates`)}
-                        className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700"
-                      >
-                        Templates
-                      </button>
-                      <button
-                        onClick={() => setUi({ mode: "qr", selected: machine })}
-                        className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700"
-                      >
-                        QR
-                      </button>
-                      <button
-                        onClick={() => setUi({ mode: "edit", selected: machine })}
-                        className="px-3 py-1 rounded-md bg-yellow-600 hover:bg-yellow-700"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDelete(machine)}
-                        className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {machines.length === 0 && (
+        <section className="light-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--surface)] text-xs uppercase tracking-wide text-[var(--hint)]">
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
-                    Nenhuma máquina cadastrada.
-                  </td>
+                  <th className="px-4 py-3 text-left font-medium">Modelo</th>
+                  <th className="px-4 py-3 text-left font-medium">Placa</th>
+                  <th className="px-4 py-3 text-left font-medium">Setor</th>
+                  <th className="px-4 py-3 text-left font-medium">TAG</th>
+                  <th className="px-4 py-3 text-right font-medium">Ações</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {machines.map((machine) => (
+                  <tr
+                    key={machine.id}
+                    className="border-t border-[var(--border)] transition hover:bg-[var(--primary-50)]"
+                  >
+                    <td className="px-4 py-3 text-[var(--text)]">{machine.modelo}</td>
+                    <td className="px-4 py-3 text-[var(--muted)]">{machine.placa ?? "-"}</td>
+                    <td className="px-4 py-3 text-[var(--muted)]">{machine.setor}</td>
+                    <td className="px-4 py-3">
+                      <code className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--text)]">
+                        {machine.tag}
+                      </code>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => router.push(`/admin/machines/${machine.id}/templates`)}
+                          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--primary-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                        >
+                          Templates
+                        </button>
+                        <button
+                          onClick={() => setUi({ mode: "qr", selected: machine })}
+                          className="rounded-md bg-[var(--success)] px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--success)] focus-visible:ring-offset-2"
+                        >
+                          QR
+                        </button>
+                        <button
+                          onClick={() => setUi({ mode: "edit", selected: machine })}
+                          className="rounded-md bg-[var(--warning)] px-3 py-1 text-xs font-semibold text-white transition hover:bg-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--warning)] focus-visible:ring-offset-2"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDelete(machine)}
+                          className="rounded-md bg-[var(--danger)] px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger)] focus-visible:ring-offset-2"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {machines.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-6 text-center text-[var(--hint)]">
+                      Nenhuma máquina cadastrada até o momento.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </div>
   );

@@ -118,7 +118,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   try {
     const recordRef = await fetchDoc(params.id);
     if (!recordRef) {
-      return NextResponse.json({ error: "NC n„o encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "NC n√£o encontrada" }, { status: 404 });
     }
 
     const data = mapNonConformityDoc(recordRef.snapshot);
@@ -141,7 +141,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const recordRef = await fetchDoc(params.id);
     if (!recordRef) {
-      return NextResponse.json({ error: "NC n„o encontrada" }, { status: 404 });
+      return NextResponse.json({ error: "NC n√£o encontrada" }, { status: 404 });
     }
 
     const existing = mapNonConformityDoc(recordRef.snapshot);
@@ -164,7 +164,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (nextStatus === "resolvida") {
       if (!hasCompletedCorrective(nextActions)) {
         return NextResponse.json(
-          { error: "Finalize ao menos uma aÁ„o corretiva antes de encerrar a NC." },
+          { error: "Finalize ao menos uma a√ß√£o corretiva antes de encerrar a NC." },
           { status: 400 },
         );
       }
@@ -177,7 +177,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         }
         if (!hasEffectivePreventive(nextActions)) {
           return NextResponse.json(
-            { error: "Marque pelo menos uma aÁ„o preventiva como eficaz (effective=true)." },
+            { error: "Marque pelo menos uma a√ß√£o preventiva como eficaz (effective=true)." },
             { status: 400 },
           );
         }

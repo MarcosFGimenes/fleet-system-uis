@@ -236,7 +236,7 @@ export default function ResponsesAdminPage() {
         <h1 className="text-2xl font-bold">Checklists Enviados</h1>
       </header>
 
-      <section className="bg-[var(--surface)] p-4 rounded-xl">
+      <section className="bg-gray-800 p-4 rounded-xl">
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <label className="text-sm">Maquina</label>
@@ -245,7 +245,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ machineId: event.target.value as FilterState["machineId"] })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
             >
               <option value="all">Todas</option>
               {machines.map((machine) => (
@@ -262,7 +262,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ hasNC: event.target.value as FilterState["hasNC"] })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
             >
               <option value="all">Todos</option>
               <option value="yes">Somente com NC</option>
@@ -277,7 +277,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ matricula: event.target.value || undefined })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
             />
           </div>
           <div>
@@ -286,7 +286,7 @@ export default function ResponsesAdminPage() {
               type="date"
               value={filter.from ?? ""}
               onChange={(event) => onFilterChange({ from: event.target.value || undefined })}
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
             />
           </div>
           <div>
@@ -295,7 +295,7 @@ export default function ResponsesAdminPage() {
               type="date"
               value={filter.to ?? ""}
               onChange={(event) => onFilterChange({ to: event.target.value || undefined })}
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
             />
           </div>
         </div>
@@ -327,7 +327,7 @@ export default function ResponsesAdminPage() {
         </div>
       </section>
 
-      <section className="bg-[var(--surface)] rounded-xl overflow-hidden">
+      <section className="bg-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-700">
@@ -376,7 +376,7 @@ export default function ResponsesAdminPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-xs text-[var(--muted)]">
+                      <div className="text-xs text-gray-300">
                         {row.km != null ? `KM ${row.km}` : ""}
                         {row.km != null && row.horimetro != null ? " - " : ""}
                         {row.horimetro != null ? `Hor ${row.horimetro}` : ""}
@@ -409,7 +409,7 @@ export default function ResponsesAdminPage() {
                           PDF
                         </button>
                         <a
-                          href={`/admin/responses/${row.id}`}
+                          href={`/responses/${row.id}`}
                           className="rounded-md bg-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-gray-600"
                         >
                           Ver

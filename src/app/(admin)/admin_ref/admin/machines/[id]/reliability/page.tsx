@@ -1,4 +1,4 @@
-ï»¿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
@@ -33,7 +33,7 @@ const severityWeight: Record<string, number> = {
 
 const severityLabel: Record<string, string> = {
   baixa: "Baixa",
-  media: "MÃ©dia",
+  media: "Média",
   alta: "Alta",
 };
 
@@ -66,7 +66,7 @@ export default function AssetReliabilityPage() {
       try {
         const machineSnap = await getDoc(doc(db, "machines", assetId));
         if (!machineSnap.exists()) {
-          setError("MÃ¡quina nÃ£o encontrada.");
+          setError("Máquina não encontrada.");
           setLoading(false);
           return;
         }
@@ -78,7 +78,7 @@ export default function AssetReliabilityPage() {
         setRecords(payload.data as NonConformity[]);
       } catch (err) {
         console.error(err);
-        setError("NÃ£o foi possÃ­vel carregar os dados de confiabilidade.");
+        setError("Não foi possível carregar os dados de confiabilidade.");
       } finally {
         setLoading(false);
       }
@@ -185,7 +185,7 @@ export default function AssetReliabilityPage() {
   if (loading) {
     return (
       <Card padding="lg">
-        <div className="text-sm text-[var(--hint)]">Carregando mÃ©tricas do ativoâ€¦</div>
+        <div className="text-sm text-gray-600">Carregando métricas do ativo…</div>
       </Card>
     );
   }
@@ -195,15 +195,15 @@ export default function AssetReliabilityPage() {
   }
 
   if (!machine) {
-    return <Alert variant="warn" description="Ativo nÃ£o encontrado ou sem dados." />;
+    return <Alert variant="warn" description="Ativo não encontrado ou sem dados." />;
   }
 
   return (
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold text-gray-900">Confiabilidade do ativo</h1>
-        <p className="text-sm text-[var(--hint)]">
-          {machine.modelo} â€¢ TAG {machine.tag}
+        <p className="text-sm text-gray-600">
+          {machine.modelo} • TAG {machine.tag}
         </p>
       </div>
 
@@ -211,7 +211,7 @@ export default function AssetReliabilityPage() {
         <div>
           <div className="text-sm text-gray-500">NCs registradas</div>
           <div className="text-2xl font-semibold text-gray-900">{metrics.totalNc}</div>
-          <div className="text-xs text-gray-500">Aberta(s): {metrics.openNc} â€¢ Fechada(s): {metrics.closedNc}</div>
+          <div className="text-xs text-gray-500">Aberta(s): {metrics.openNc} • Fechada(s): {metrics.closedNc}</div>
         </div>
         <div>
           <div className="text-sm text-gray-500">MTBF (h)</div>
@@ -236,14 +236,14 @@ export default function AssetReliabilityPage() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card padding="lg" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Severidade x tempo de resoluÃ§Ã£o</h2>
-            <span className="text-xs text-gray-500">Horas atÃ© conclusÃ£o</span>
+            <h2 className="text-lg font-semibold text-gray-900">Severidade x tempo de resolução</h2>
+            <span className="text-xs text-gray-500">Horas até conclusão</span>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart>
                 <CartesianGrid stroke="#e5e7eb" />
-                <XAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "MÃ©dia", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
+                <XAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "Média", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
                 <YAxis type="number" dataKey="resolution" name="Horas" />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number, _name, item) => [
                   `${(value as number).toFixed(1)} h`,
@@ -266,7 +266,7 @@ export default function AssetReliabilityPage() {
               <ScatterChart>
                 <CartesianGrid stroke="#e5e7eb" />
                 <XAxis type="number" dataKey="idle" name="Ralenti (h)" />
-                <YAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "MÃ©dia", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
+                <YAxis type="number" dataKey="severityWeight" name="Severidade" tickFormatter={(value) => ({ 1: "Baixa", 2: "Média", 3: "Alta" }[value as number] ?? String(value))} domain={[0.5, 3.5]} />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} formatter={(value: number, _name, item) => [
                   (value as number).toFixed(1),
                   (item?.payload as any)?.title ?? "",
@@ -287,12 +287,12 @@ export default function AssetReliabilityPage() {
               key: "createdAt",
               label: "Registrada",
               render: (record: typeof timelineData[number]) => (
-                <span className="text-sm text-[var(--hint)]">{dateFormatter.format(new Date(record.createdAt))}</span>
+                <span className="text-sm text-gray-600">{dateFormatter.format(new Date(record.createdAt))}</span>
               ),
             },
             {
               key: "title",
-              label: "TÃ­tulo",
+              label: "Título",
               render: (record: typeof timelineData[number]) => (
                 <div className="flex flex-col">
                   <span className="text-sm font-medium text-gray-800">{record.title}</span>
@@ -304,7 +304,7 @@ export default function AssetReliabilityPage() {
               key: "status",
               label: "Status",
               render: (record: typeof timelineData[number]) => (
-                <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
                   {record.status}
                 </span>
               ),
@@ -313,14 +313,14 @@ export default function AssetReliabilityPage() {
               key: "dueAt",
               label: "SLA",
               render: (record: typeof timelineData[number]) => (
-                <span className="text-sm text-[var(--hint)]">{record.dueAt ? dateFormatter.format(new Date(record.dueAt)) : "-"}</span>
+                <span className="text-sm text-gray-600">{record.dueAt ? dateFormatter.format(new Date(record.dueAt)) : "-"}</span>
               ),
             },
             {
               key: "recurrence",
-              label: "RecorrÃªncia",
+              label: "Recorrência",
               render: (record: typeof timelineData[number]) => (
-                <span className="text-sm text-[var(--hint)]">{record.recurrence ? "Sim" : "NÃ£o"}</span>
+                <span className="text-sm text-gray-600">{record.recurrence ? "Sim" : "Não"}</span>
               ),
             },
           ]}
@@ -335,12 +335,12 @@ export default function AssetReliabilityPage() {
       </Card>
 
       <Card padding="lg" className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">TendÃªncia semanal</h2>
-        <div className="text-sm text-[var(--hint)]">
+        <h2 className="text-lg font-semibold text-gray-900">Tendência semanal</h2>
+        <div className="text-sm text-gray-600">
           {groupByDayWeek(records, "week").map((item) => (
             <div key={item.period} className="flex items-center justify-between border-b border-gray-100 py-1">
               <span>{item.period}</span>
-              <span>Abertas: {item.opened} â€¢ Fechadas: {item.closed}</span>
+              <span>Abertas: {item.opened} • Fechadas: {item.closed}</span>
             </div>
           ))}
         </div>
@@ -348,4 +348,3 @@ export default function AssetReliabilityPage() {
     </div>
   );
 }
-

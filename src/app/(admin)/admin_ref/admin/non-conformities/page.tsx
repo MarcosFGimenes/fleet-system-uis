@@ -163,7 +163,7 @@ export default function NonConformitiesOverviewPage() {
         const parsed = JSON.parse(saved) as Partial<Filters>;
         setFilters((prev) => ({ ...prev, ...parsed }));
       } catch (parseError) {
-        console.warn("Não foi possível carregar filtros salvos", parseError);
+        console.warn("Nao foi possivel carregar filtros salvos", parseError);
       }
     }
   }, []);
@@ -206,7 +206,7 @@ export default function NonConformitiesOverviewPage() {
 
     fetch(`/api/nc?${params.toString()}`, { signal: controller.signal })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Falha ao carregar não conformidades");
+        if (!res.ok) throw new Error("Falha ao carregar nao conformidades");
         const payload = await res.json();
         if (cancelled) return;
         setRecords(payload.data as NonConformity[]);
@@ -216,7 +216,7 @@ export default function NonConformitiesOverviewPage() {
       .catch((err) => {
         if (cancelled || err.name === "AbortError") return;
         console.error(err);
-        setError("Não foi possível carregar as não conformidades.");
+        setError("Nao foi possivel carregar as nao conformidades.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -290,7 +290,7 @@ export default function NonConformitiesOverviewPage() {
             setFilters((prev) => ({ ...prev, status: event.target.value }));
             setPage(1);
           }}
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           {statusOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -304,7 +304,7 @@ export default function NonConformitiesOverviewPage() {
             setFilters((prev) => ({ ...prev, severity: event.target.value }));
             setPage(1);
           }}
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           {severityOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -319,7 +319,7 @@ export default function NonConformitiesOverviewPage() {
             setPage(1);
           }}
           placeholder="Filtrar por ativo ou TAG"
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
         <input
           type="date"
@@ -328,7 +328,7 @@ export default function NonConformitiesOverviewPage() {
             setFilters((prev) => ({ ...prev, dateFrom: event.target.value || undefined }));
             setPage(1);
           }}
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
         <input
           type="date"
@@ -337,7 +337,7 @@ export default function NonConformitiesOverviewPage() {
             setFilters((prev) => ({ ...prev, dateTo: event.target.value || undefined }));
             setPage(1);
           }}
-          className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
         <input
           value={filters.q}
@@ -346,7 +346,7 @@ export default function NonConformitiesOverviewPage() {
             setPage(1);
           }}
           placeholder="Buscar por titulo, ativo ou causa"
-          className="w-48 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          className="w-48 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
       </div>
       {selectedIds.length > 0 && (
@@ -379,7 +379,7 @@ export default function NonConformitiesOverviewPage() {
                   event.target.value = "";
                 }
               }}
-              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </label>
           <label className="flex items-center gap-2">
@@ -394,7 +394,7 @@ export default function NonConformitiesOverviewPage() {
                   event.currentTarget.value = "";
                 }
               }}
-              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </label>
         </div>
@@ -413,7 +413,7 @@ export default function NonConformitiesOverviewPage() {
           checked={selectedIds.includes(record.id)}
           onChange={(event) => handleSelectToggle(record.id, event.target.checked)}
           onClick={(event) => event.stopPropagation()}
-          className="size-4 rounded border border-gray-300 text-blue-600 focus:ring-[var(--primary)]"
+          className="size-4 rounded border border-gray-300 text-blue-600 focus:ring-blue-500"
         />
       ),
     },
@@ -421,7 +421,7 @@ export default function NonConformitiesOverviewPage() {
       key: "status",
       label: "Status",
       render: (record: NonConformity) => (
-        <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
+        <span className="rounded-full border border-gray-200 bg-gray-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
           {statusLabel[record.status] ?? record.status}
         </span>
       ),
@@ -433,7 +433,7 @@ export default function NonConformitiesOverviewPage() {
         <span
           className={[
             "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
-            severityStyles[record.severity ?? ""] ?? "bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]",
+            severityStyles[record.severity ?? ""] ?? "bg-gray-100 text-gray-600 border border-gray-200",
           ].join(" ")}
         >
           {record.severity ? record.severity.toUpperCase() : "-"}
@@ -468,7 +468,7 @@ export default function NonConformitiesOverviewPage() {
       key: "createdAt",
       label: "Criado em",
       render: (record: NonConformity) => (
-        <span className="text-sm text-[var(--hint)]">{dateFormatter.format(new Date(record.createdAt))}</span>
+        <span className="text-sm text-gray-600">{dateFormatter.format(new Date(record.createdAt))}</span>
       ),
     },
     {
@@ -498,14 +498,14 @@ export default function NonConformitiesOverviewPage() {
       key: "owner",
       label: "Responsavel",
       render: (record: NonConformity) => (
-        <span className="text-sm text-[var(--hint)]">{getCorrectiveOwner(record) ?? "–"}</span>
+        <span className="text-sm text-gray-600">{getCorrectiveOwner(record) ?? "–"}</span>
       ),
     },
     {
       key: "recurrence",
       label: "Recorrencia",
       render: (record: NonConformity) => (
-        <span className="text-sm text-[var(--hint)]">{record.recurrenceOfId ? "Sim" : "Não"}</span>
+        <span className="text-sm text-gray-600">{record.recurrenceOfId ? "Sim" : "Nao"}</span>
       ),
     },
   ];
@@ -513,8 +513,8 @@ export default function NonConformitiesOverviewPage() {
   return (
     <div className="space-y-8">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900">Gestao de não conformidades</h1>
-        <p className="text-sm text-[var(--hint)]">
+        <h1 className="text-2xl font-semibold text-gray-900">Gestao de nao conformidades</h1>
+        <p className="text-sm text-gray-600">
           Consolide NCs de checklists e adicionais, acompanhe SLA, recorrencia e CAPA.
         </p>
       </div>
@@ -612,7 +612,7 @@ export default function NonConformitiesOverviewPage() {
               <h2 className="text-lg font-semibold text-gray-900">Distribuicao por severidade</h2>
               <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
                 {Object.entries(kpis.openBySeverity).map(([severity, value]) => (
-                  <div key={severity} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
+                  <div key={severity} className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
                     <div className="text-xl font-semibold text-gray-900">{value}</div>
                     <div className="text-xs uppercase tracking-wide text-gray-500">{severity}</div>
                   </div>
@@ -629,8 +629,8 @@ export default function NonConformitiesOverviewPage() {
       <Card padding="lg" className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <h2 className="text-xl font-semibold text-gray-900">Lista de não conformidades</h2>
-            <p className="text-sm text-[var(--hint)]">
+            <h2 className="text-xl font-semibold text-gray-900">Lista de nao conformidades</h2>
+            <p className="text-sm text-gray-600">
               Filtre e atualize status, responsaveis e SLAs das NCs provenientes dos checklists.
             </p>
           </div>
@@ -664,7 +664,6 @@ export default function NonConformitiesOverviewPage() {
     </div>
   );
 }
-
 
 
 

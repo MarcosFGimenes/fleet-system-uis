@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("GET /api/nc failed", error);
     return NextResponse.json(
-      { error: "Não foi possível carregar as NCs" },
+      { error: "NÃ£o foi possÃ­vel carregar as NCs" },
       { status: 500 },
     );
   }

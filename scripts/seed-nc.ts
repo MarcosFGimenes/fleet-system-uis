@@ -12,18 +12,18 @@ const severityPool: Severity[] = ["alta", "media", "baixa"];
 const statusPool: NcStatus[] = ["aberta", "em_execucao", "aguardando_peca", "bloqueada", "resolvida"];
 
 const assets = [
-  { id: "asset-truck-01", tag: "TRK-01", modelo: "Caminh„o 3132", tipo: "Caminh„o", setor: "LogÌstica" },
-  { id: "asset-fork-02", tag: "FORK-02", modelo: "Empilhadeira H50", tipo: "Empilhadeira", setor: "ArmazÈm" },
-  { id: "asset-loader-03", tag: "LD-03", modelo: "P·-carregadeira 966K", tipo: "P·-carregadeira", setor: "Pedreira" },
+  { id: "asset-truck-01", tag: "TRK-01", modelo: "Caminh√£o 3132", tipo: "Caminh√£o", setor: "Log√≠stica" },
+  { id: "asset-fork-02", tag: "FORK-02", modelo: "Empilhadeira H50", tipo: "Empilhadeira", setor: "Armaz√©m" },
+  { id: "asset-loader-03", tag: "LD-03", modelo: "P√°-carregadeira 966K", tipo: "P√°-carregadeira", setor: "Pedreira" },
 ];
 
 const titles = [
-  "VibraÁ„o anormal no motor",
+  "Vibra√ß√£o anormal no motor",
   "Sensor de temperatura intermitente",
-  "Vazamento no sistema hidr·ulico",
+  "Vazamento no sistema hidr√°ulico",
   "Desgaste prematuro de pneu",
-  "Falha na iluminaÁ„o de cabine",
-  "CÛdigo de falha 1234 do ECM",
+  "Falha na ilumina√ß√£o de cabine",
+  "C√≥digo de falha 1234 do ECM",
 ];
 
 function randomOf<T>(list: T[]): T {
@@ -55,7 +55,7 @@ function buildCorrectiveAction(createdAt: string, status: NcStatus): NcAction[] 
     id: crypto.randomUUID(),
     type: "corretiva",
     description: "Realizado ajuste corretivo e teste operacional",
-    owner: { id: "tech-01", nome: "TÈcnico Leonardo" },
+    owner: { id: "tech-01", nome: "T√©cnico Leonardo" },
     startedAt: new Date(new Date(createdAt).getTime() + 2 * 60 * 60 * 1000).toISOString(),
   };
   if (status === "resolvida") {
@@ -64,7 +64,7 @@ function buildCorrectiveAction(createdAt: string, status: NcStatus): NcAction[] 
   const preventive: NcAction = {
     id: crypto.randomUUID(),
     type: "preventiva",
-    description: "InspeÁ„o adicional e lubrificaÁ„o programada",
+    description: "Inspe√ß√£o adicional e lubrifica√ß√£o programada",
     owner: { id: "mant-02", nome: "Supervisor Carla" },
     startedAt: new Date(new Date(createdAt).getTime() + 4 * 60 * 60 * 1000).toISOString(),
     completedAt: new Date(new Date(createdAt).getTime() + 24 * 60 * 60 * 1000).toISOString(),
@@ -101,7 +101,7 @@ async function main() {
       dueAt: dueAt.toISOString(),
       createdAt: createdAt.toISOString(),
       createdAtTs: Timestamp.fromDate(createdAt),
-      createdBy: { id: "seed-user", matricula: "0000", nome: "Usu·rio Seed" },
+      createdBy: { id: "seed-user", matricula: "0000", nome: "Usu√°rio Seed" },
       linkedAsset: asset,
       linkedTemplateId: "template-seed",
       source: Math.random() > 0.5 ? "checklist_extra" : "checklist_question",
@@ -118,7 +118,7 @@ async function main() {
   });
 
   await Promise.all(operations);
-  console.log(`Seed concluÌdo: ${batchSize} NCs inseridas.`);
+  console.log(`Seed conclu√≠do: ${batchSize} NCs inseridas.`);
 }
 
 main().catch((error) => {

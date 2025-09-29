@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -12,13 +12,13 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { href: "/admin", label: "Inicio" },
+  { href: "/admin", label: "Início" },
   { href: "/admin/analytics", label: "KPIs", badge: "Performance" },
-  { href: "/admin/machines", label: "Maquinas", badge: "Cadastros" },
+  { href: "/admin/machines", label: "Máquinas", badge: "Cadastros" },
   { href: "/admin/templates", label: "Templates", badge: "Modelos" },
-  { href: "/admin/responses", label: "Checklists", badge: "Historico" },
-  { href: "/admin/non-conformities", label: "Nao conformidades", badge: "NCs" },
-  { href: "/admin/users", label: "Usuarios", badge: "Em breve", disabled: true },
+  { href: "/admin/responses", label: "Checklists", badge: "Histórico" },
+  { href: "/admin/non-conformities", label: "Não conformidades", badge: "NCs" },
+  { href: "/admin/users", label: "Usuários", badge: "Em breve", disabled: true },
 ];
 
 export default function AdminSidebar() {
@@ -27,10 +27,16 @@ export default function AdminSidebar() {
 
   const renderItem = (item: NavItem) => {
     const active = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
-    const baseClass = "flex items-center justify-between rounded-lg px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
-    const stateClass = active
-      ? "bg-blue-50 text-blue-600"
-      : "text-gray-600 hover:bg-gray-50 hover:text-blue-600";
+    const classes = [
+      "flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-all" ,
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]",
+      active
+        ? "bg-[var(--primary-50)] text-[var(--primary)] border-[var(--primary)]/40 shadow-sm-soft"
+        : "text-[var(--muted)] border-transparent hover:bg-[var(--primary-50)] hover:text-[var(--primary)]",
+      item.disabled ? "pointer-events-none opacity-50" : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
       <li key={item.href}>
@@ -38,11 +44,11 @@ export default function AdminSidebar() {
           href={item.disabled ? pathname ?? "/admin" : item.href}
           aria-disabled={item.disabled}
           onClick={() => setOpen(false)}
-          className={[baseClass, stateClass, item.disabled ? "pointer-events-none opacity-50" : ""].join(" ")}
+          className={classes}
         >
           <span className="font-medium">{item.label}</span>
           {item.badge && (
-            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--hint)]">
               {item.badge}
             </span>
           )}
@@ -53,39 +59,41 @@ export default function AdminSidebar() {
 
   return (
     <>
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 shadow-sm md:hidden">
+      <div className="sticky top-0 z-[1200] flex items-center justify-between border-b border-[var(--border)] bg-[var(--bg)]/95 px-4 py-3 backdrop-blur md:hidden">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
-          className="rounded-md border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-semibold text-[var(--muted)] shadow-sm-soft transition hover:bg-[var(--primary-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         >
           {open ? "Fechar menu" : "Abrir menu"}
         </button>
-        <div className="text-sm font-semibold text-gray-600">Admin</div>
+        <div className="text-sm font-semibold text-[var(--muted)]">Admin</div>
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-30 md:hidden">
-          <div className="absolute inset-0 bg-gray-900/40" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-gray-200 bg-white p-4 shadow-xl">
+        <div className="fixed inset-0 z-[1300] md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden="true" />
+          <aside className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg)] p-5 shadow-md-soft">
             <Brand />
             <nav className="mt-6">
-              <ul className="space-y-1">
-                {NAV.map((item) => renderItem(item))}
+              <ul className="space-y-1 text-sm">
+                {NAV.map(renderItem)}
               </ul>
             </nav>
           </aside>
         </div>
       )}
 
-      <aside className="fixed inset-y-0 hidden w-72 overflow-y-auto border-r border-gray-200 bg-white px-4 py-6 md:flex md:flex-col">
+      <aside className="fixed inset-y-0 hidden w-72 overflow-y-auto border-r border-[var(--border)] bg-[var(--bg)] px-4 py-6 shadow-sm-soft md:flex md:flex-col">
         <Brand />
         <nav className="mt-6">
-          <ul className="space-y-1 text-sm text-gray-600">
-            {NAV.map((item) => renderItem(item))}
+          <ul className="space-y-1 text-sm">
+            {NAV.map(renderItem)}
           </ul>
         </nav>
-        <footer className="mt-auto pt-8 text-xs text-gray-400">Gestao de Frota - Admin</footer>
+        <footer className="mt-auto border-t border-[var(--border)] pt-4 text-xs text-[var(--hint)]">
+          Gestão de Frota - Admin
+        </footer>
       </aside>
     </>
   );
@@ -93,13 +101,13 @@ export default function AdminSidebar() {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3">
-      <div className="grid size-9 place-items-center rounded-xl bg-blue-600 text-base font-semibold text-white shadow-sm">
+    <div className="flex items-center gap-3 rounded-lg p-2 transition hover:bg-[var(--primary-50)]">
+      <div className="grid size-9 place-items-center rounded-lg bg-[var(--primary)] text-base font-semibold text-white shadow-sm-soft">
         GF
       </div>
       <div>
-        <p className="text-sm font-semibold text-gray-900">Gestao de Frota</p>
-        <p className="text-xs text-gray-500">Centro de manutencao</p>
+        <p className="text-sm font-semibold">Gestão de Frota</p>
+        <p className="text-xs text-[var(--muted)]">Centro de manutenção</p>
       </div>
     </div>
   );

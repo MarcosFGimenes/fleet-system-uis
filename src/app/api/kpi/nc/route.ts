@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
@@ -48,7 +48,7 @@ function filterRecent(records: NonConformity[], days: number): NonConformity[] {
 function buildSeverityBySystem(records: NonConformity[]) {
   const map = new Map<string, { alta: number; media: number; baixa: number }>();
   for (const record of records) {
-    const key = record.systemCategory ?? "N�o classificado";
+    const key = record.systemCategory ?? "Não classificado";
     if (!map.has(key)) {
       map.set(key, { alta: 0, media: 0, baixa: 0 });
     }
@@ -119,3 +119,4 @@ export async function GET() {
     return NextResponse.json({ error: "Falha ao calcular KPIs" }, { status: 500 });
   }
 }
+

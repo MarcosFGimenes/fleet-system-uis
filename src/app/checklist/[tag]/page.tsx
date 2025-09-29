@@ -27,9 +27,9 @@ import { useNotification } from "@/hooks/useNotification";
 import Notification from "@/components/Notification";
 import Spinner from "@/components/Spinner";
 
-// -----------------
-// Tipagens locais
-// -----------------
+/* ============================
+   Tipagens locais
+============================ */
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
@@ -57,6 +57,85 @@ type ExtraNc = {
   description?: string;
   severity?: "baixa" | "media" | "alta";
 };
+
+/* ============================
+   Ícones inline (SVG)
+============================ */
+function IconCheck() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+      <path d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.2 7.3a1 1 0 0 1-1.43.008L3.29 9.52a1 1 0 1 1 1.42-1.41l3.02 3.01 6.494-6.59a1 1 0 0 1 1.48-.24z" fill="currentColor"/>
+    </svg>
+  );
+}
+function IconX() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+      <path d="M14.348 5.652a1 1 0 0 1 0 1.414L11.414 10l2.934 2.934a1 1 0 1 1-1.414 1.414L10 11.414l-2.934 2.934a1 1 0 1 1-1.414-1.414L8.586 10 5.652 7.066A1 1 0 0 1 7.066 5.652L10 8.586l2.934-2.934a1 1 0 0 1 1.414 0z" fill="currentColor"/>
+    </svg>
+  );
+}
+function IconMinus() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4">
+      <rect x="4" y="9" width="12" height="2" fill="currentColor"/>
+    </svg>
+  );
+}
+
+/* ============================
+   Botão de escolha (C / NC / N/A)
+   - Branco com borda preta
+   - Ao selecionar: muda para verde/vermelho/cinza
+   - Ícones e foco acessíveis
+============================ */
+function ChoiceBtn({
+  active,
+  tone,
+  children,
+  onClick,
+  ariaLabel,
+}: {
+  active: boolean;
+  tone: "ok" | "nc" | "na";
+  children: React.ReactNode;
+  onClick: () => void;
+  ariaLabel: string;
+}) {
+  const base = "inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-colors transition-shadow focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 border-2";
+  // Estados de cor
+  // Inativo: branco com borda PRETA
+  const inactive = "bg-white text-[var(--text)] border-black shadow-sm hover:bg-[var(--primary-50)] !bg-white !text-[var(--text)] !border-black hover:!bg-[var(--primary-50)]";
+  // Ativo por tom
+  const activeByTone: Record<typeof tone, string> = {
+    ok: "bg-[var(--success)] text-white border-[var(--success)] shadow-sm-soft !bg-[var(--success)] !border-[var(--success)]",
+    nc: "bg-[var(--danger)] text-white border-[var(--danger)] shadow-sm-soft !bg-[var(--danger)] !border-[var(--danger)]",
+    na: "bg-gray-500 text-white border-gray-500 shadow-sm-soft !bg-gray-500 !border-gray-500",
+  };
+  // Anel de foco coerente
+  const focusByTone: Record<typeof tone, string> = {
+    ok: "focus-visible:outline-[var(--success)]",
+    nc: "focus-visible:outline-[var(--danger)]",
+    na: "focus-visible:outline-gray-500",
+  };
+
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={ariaLabel}
+      className={`${base} ${active ? activeByTone[tone] : inactive} ${focusByTone[tone]}`}
+      onClick={onClick}
+    >
+      {/* Ícone muda com o tom; quando inativo mostramos o contorno via cor de texto padrão */}
+      {tone === "ok" && <IconCheck />}
+      {tone === "nc" && <IconX />}
+      {tone === "na" && <IconMinus />}
+      <span className="sr-only">{ariaLabel}</span>
+      <span aria-hidden="true">{children}</span>
+    </button>
+  );
+}
 
 export default function ChecklistByTagPage() {
   const { tag } = useParams<Params>();
@@ -92,9 +171,9 @@ export default function ChecklistByTagPage() {
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
 
-  // -----------------
-  // Carregamento inicial
-  // -----------------
+  /* ============================
+     Carregamento inicial
+  ============================ */
   useEffect(() => {
     const load = async () => {
       try {
@@ -152,9 +231,9 @@ export default function ChecklistByTagPage() {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
-  // -----------------
-  // Buscar último checklist para recorrência
-  // -----------------
+  /* ============================
+     Buscar último checklist
+  ============================ */
   useEffect(() => {
     let cancelled = false;
 
@@ -237,9 +316,9 @@ export default function ChecklistByTagPage() {
     setPreviousError(null);
   }, [selectedTemplateId]);
 
-  // -----------------
-  // Helpers de estado
-  // -----------------
+  /* ============================
+     Helpers
+  ============================ */
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
     setAnswers((prev) => ({
       ...prev,
@@ -261,9 +340,9 @@ export default function ChecklistByTagPage() {
     setRecurrenceDecisions((prev) => ({ ...prev, [questionId]: status }));
   };
 
-  // -----------------
-  // Validação de usuário
-  // -----------------
+  /* ============================
+     Validação usuário
+  ============================ */
   const validateUser = async () => {
     const trimmed = matricula.trim();
     if (!trimmed) {
@@ -280,9 +359,9 @@ export default function ChecklistByTagPage() {
     };
   };
 
-  // -----------------
-  // Envio
-  // -----------------
+  /* ============================
+     Envio
+  ============================ */
   const handleSubmit = async () => {
     if (!machine || !currentTemplate) return;
 
@@ -395,12 +474,12 @@ export default function ChecklistByTagPage() {
     }
   };
 
-  // -----------------
-  // Render
-  // -----------------
+  /* ============================
+     Render
+  ============================ */
   if (state === "loading") {
     return (
-      <div className="min-h-screen grid place-items-center bg-gray-100 text-gray-800">
+      <div className="min-h-screen grid place-items-center bg-[var(--surface)] text-[var(--text)]">
         <div className="flex items-center gap-3">
           <Spinner />
           <p>Carregando checklist…</p>
@@ -411,9 +490,9 @@ export default function ChecklistByTagPage() {
 
   if (state === "error" || !machine) {
     return (
-      <div className="min-h-screen grid place-items-center bg-gray-100 text-gray-800">
-        <div className="bg-white p-6 rounded-xl shadow-md">
-          <p className="text-red-600 font-semibold">Máquina não encontrada pelo QR ou TAG.</p>
+      <div className="min-h-screen grid place-items-center bg-[var(--surface)] text-[var(--text)]">
+        <div className="rounded-xl light-card p-6">
+          <p className="text-[var(--danger)] font-semibold">Máquina não encontrada pelo QR ou TAG.</p>
         </div>
       </div>
     );
@@ -430,116 +509,89 @@ export default function ChecklistByTagPage() {
 
   const submitDisabled = !currentTemplate || userLookup.state !== "found" || isSubmitting;
 
-  // Botão padrão
-  const ChoiceBtn = ({
-    active,
-    children,
-    onClick,
-    tone = "neutral",
-  }: {
-    active: boolean;
-    children: React.ReactNode;
-    onClick: () => void;
-    tone?: "neutral" | "ok" | "nc" | "na";
-  }) => {
-    const base =
-      "px-4 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
-    const tones: Record<string, string> = {
-      ok: active
-        ? "bg-emerald-600 text-white focus:ring-emerald-600"
-        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-emerald-600",
-      nc: active
-        ? "bg-red-600 text-white focus:ring-red-600"
-        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-red-600",
-      na: active
-        ? "bg-gray-600 text-white focus:ring-gray-600"
-        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-gray-600",
-      neutral: "bg-gray-100 text-gray-800 hover:bg-gray-200",
-    };
-    return (
-      <button className={`${base} ${tones[tone]}`} onClick={onClick} type="button">
-        {children}
-      </button>
-    );
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 p-4">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4">
       <div className="mx-auto max-w-3xl space-y-6">
         {/* Cabeçalho */}
         <header className="space-y-1">
-          <h1 className="text-2xl font-bold">Checklist – {machine.modelo}</h1>
-          <p className="text-sm text-gray-600">
-            TAG: <code className="rounded bg-gray-200 px-2 py-0.5 text-gray-800 border border-gray-300">{machine.tag}</code>
+          <h1 className="text-2xl font-semibold tracking-tight">Checklist – {machine.modelo}</h1>
+          <p className="text-sm text-[var(--hint)]">
+            TAG:{" "}
+            <code className="rounded bg-[var(--surface)] px-2 py-0.5 text-[var(--muted)] border border-[var(--border)]">
+              {machine.tag}
+            </code>
           </p>
         </header>
 
         {/* Identificação */}
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+        <section className="rounded-xl light-card p-4 space-y-3">
           <h2 className="font-semibold">Identificação</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm text-gray-600">Matrícula</label>
+              <label className="text-sm text-[var(--hint)]">Matrícula</label>
               <input
                 value={matricula}
                 onChange={(e) => setMatricula(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                 placeholder="Ex: 1001"
                 inputMode="numeric"
+                aria-label="Matrícula do operador"
               />
               {userLookup.state === "searching" && (
-                <p className="text-xs text-gray-500">Buscando matrícula…</p>
+                <p className="text-xs text-[var(--hint)]">Buscando matrícula…</p>
               )}
               {userLookup.state === "not_found" && (
-                <p className="text-xs text-red-600">{userLookup.message}</p>
+                <p className="text-xs text-[var(--danger)]">{userLookup.message}</p>
               )}
               {userLookup.state === "error" && (
-                <p className="text-xs text-red-600">{userLookup.message}</p>
+                <p className="text-xs text-[var(--danger)]">{userLookup.message}</p>
               )}
               {userLookup.state === "found" && nome && (
-                <p className="text-xs text-emerald-600">Operador encontrado.</p>
+                <p className="text-xs text-[var(--success)]">Operador encontrado.</p>
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-gray-600">Nome do operador</label>
+              <label className="text-sm text-[var(--hint)]">Nome do operador</label>
               <input
                 value={nome}
                 readOnly
-                className="w-full rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-gray-600"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-gray-600"
                 placeholder="Preenchido automaticamente"
+                aria-label="Nome do operador"
               />
             </div>
           </div>
         </section>
 
         {/* Dados de operação */}
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+        <section className="rounded-xl light-card p-4 space-y-3">
           <h2 className="font-semibold">Dados da operação</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
-              <label className="text-sm text-gray-600">KM</label>
+              <label className="text-sm text-[var(--hint)]">KM</label>
               <input
                 type="number"
                 value={km}
                 onChange={(e) => setKm(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-gray-600">Horímetro</label>
+              <label className="text-sm text-[var(--hint)]">Horímetro</label>
               <input
                 type="number"
                 value={horimetro}
                 onChange={(e) => setHorimetro(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-gray-600">Tipo de checklist</label>
+              <label className="text-sm text-[var(--hint)]">Tipo de checklist</label>
               <select
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                aria-label="Selecionar template"
               >
                 {templates.length > 0 ? (
                   templates.map((t) => (
@@ -556,13 +608,13 @@ export default function ChecklistByTagPage() {
         </section>
 
         {/* Perguntas */}
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-4">
+        <section className="rounded-xl light-card p-4 space-y-4">
           <h2 className="font-semibold">Perguntas</h2>
 
           {currentTemplate ? (
             <div className="space-y-4">
               {previousLoading && (
-                <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--muted)]">
                   Verificando checklist anterior…
                 </div>
               )}
@@ -587,10 +639,10 @@ export default function ChecklistByTagPage() {
                 const isRecurrence = Boolean(previousNc);
 
                 return (
-                  <div key={question.id} className="rounded-lg border border-gray-200 p-4">
+                  <div key={question.id} className="rounded-lg border border-[var(--border)] p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <p className="font-medium text-gray-900">
-                        <span className="mr-2 rounded-full bg-gray-100 px-2 py-0.5 text-sm text-gray-600">
+                      <p className="font-medium">
+                        <span className="mr-2 rounded-full bg-[var(--surface)] px-2 py-0.5 text-sm text-[var(--hint)] border border-[var(--border)]">
                           {String(index + 1).padStart(2, "0")}
                         </span>
                         {question.text}
@@ -627,7 +679,7 @@ export default function ChecklistByTagPage() {
                               value="resolved"
                               checked={recurrenceStatus === "resolved"}
                               onChange={() => setRecurrenceDecision(question.id, "resolved")}
-                              className="accent-emerald-600"
+                              className="accent-[var(--success)]"
                             />
                             <span>Resolvido</span>
                           </label>
@@ -648,26 +700,33 @@ export default function ChecklistByTagPage() {
 
                     <div className="mt-3 flex flex-col gap-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-gray-700">Resultado:</span>
+                        <span className="text-sm font-medium text-[var(--muted)]">Resultado:</span>
+
+                        {/* Grupo de botões (C / NC / N/A) */}
                         <div className="flex gap-2">
                           <ChoiceBtn
                             tone="ok"
                             active={answers[question.id]?.response === "ok"}
                             onClick={() => setResponse(question.id, "ok")}
+                            ariaLabel="Marcar como Conforme"
                           >
                             C
                           </ChoiceBtn>
+
                           <ChoiceBtn
                             tone="nc"
                             active={answers[question.id]?.response === "nc"}
                             onClick={() => setResponse(question.id, "nc")}
+                            ariaLabel="Marcar como Não Conforme"
                           >
                             NC
                           </ChoiceBtn>
+
                           <ChoiceBtn
                             tone="na"
                             active={answers[question.id]?.response === "na"}
                             onClick={() => setResponse(question.id, "na")}
+                            ariaLabel="Marcar como Não se Aplica"
                           >
                             N/A
                           </ChoiceBtn>
@@ -675,13 +734,13 @@ export default function ChecklistByTagPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-sm text-gray-600">Observações</label>
+                        <label className="block text-sm text-[var(--hint)]">Observações</label>
                         <textarea
                           value={answers[question.id]?.observation ?? ""}
                           onChange={(e) => setObservation(question.id, e.target.value)}
                           rows={3}
                           placeholder="Registre detalhes importantes, evidências ou observações adicionais"
-                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                          className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--hint)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                         />
                       </div>
                     </div>
@@ -690,52 +749,52 @@ export default function ChecklistByTagPage() {
               })}
             </div>
           ) : (
-            <p className="text-sm text-gray-600">Nenhum template selecionado ou vinculado.</p>
+            <p className="text-sm text-[var(--hint)]">Nenhum template selecionado ou vinculado.</p>
           )}
         </section>
 
         {/* NCs Extras */}
-        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+        <section className="rounded-xl light-card p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Adicionar não conformidades que não estão nas perguntas</h2>
             <button
               type="button"
               onClick={() => setExtraNcs((prev) => [...prev, { title: "" }])}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+              className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[var(--primary-700)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
             >
               + Adicionar
             </button>
           </div>
 
           {extraNcs.length === 0 && (
-            <p className="text-sm text-gray-600">Se necessário, registre aqui qualquer NC adicional observada.</p>
+            <p className="text-sm text-[var(--hint)]">Se necessário, registre aqui qualquer NC adicional observada.</p>
           )}
 
           <div className="space-y-3">
             {extraNcs.map((item, idx) => (
-              <div key={idx} className="rounded-lg border border-gray-200 p-3">
+              <div key={idx} className="rounded-lg border border-[var(--border)] p-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
                   <div className="sm:col-span-3">
-                    <label className="text-sm text-gray-600">Título da NC *</label>
+                    <label className="text-sm text-[var(--hint)]">Título da NC *</label>
                     <input
                       value={item.title}
                       onChange={(e) => {
                         const v = e.target.value;
                         setExtraNcs((prev) => prev.map((x, i) => (i === idx ? { ...x, title: v } : x)));
                       }}
-                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                       placeholder="Ex.: Vazamento em mangueira hidráulica"
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="text-sm text-gray-600">Severidade</label>
+                    <label className="text-sm text-[var(--hint)]">Severidade</label>
                     <select
                       value={item.severity || ""}
                       onChange={(e) => {
                         const v = e.target.value as ExtraNc["severity"];
                         setExtraNcs((prev) => prev.map((x, i) => (i === idx ? { ...x, severity: (v || undefined) } : x)));
                       }}
-                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                     >
                       <option value="">—</option>
                       <option value="baixa">Baixa</option>
@@ -744,7 +803,7 @@ export default function ChecklistByTagPage() {
                     </select>
                   </div>
                   <div className="sm:col-span-6">
-                    <label className="text-sm text-gray-600">Descrição</label>
+                    <label className="text-sm text-[var(--hint)]">Descrição</label>
                     <textarea
                       value={item.description || ""}
                       onChange={(e) => {
@@ -753,7 +812,7 @@ export default function ChecklistByTagPage() {
                       }}
                       rows={2}
                       placeholder="Detalhe a situação observada"
-                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                      className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] placeholder-[var(--hint)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     />
                   </div>
                 </div>
@@ -761,7 +820,7 @@ export default function ChecklistByTagPage() {
                   <button
                     type="button"
                     onClick={() => setExtraNcs((prev) => prev.filter((_, i) => i !== idx))}
-                    className="text-sm font-medium text-red-600 hover:underline"
+                    className="text-sm font-medium text-[var(--danger)] hover:underline"
                   >
                     Remover
                   </button>
@@ -775,7 +834,7 @@ export default function ChecklistByTagPage() {
         <div className="flex justify-end">
           <button
             onClick={handleSubmit}
-            className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-[var(--success)] px-5 py-2 font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-[var(--success)] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={submitDisabled}
           >
             {isSubmitting ? <Spinner /> : "Enviar Checklist"}
@@ -793,3 +852,6 @@ export default function ChecklistByTagPage() {
     </div>
   );
 }
+
+
+

@@ -45,19 +45,24 @@ export function DataTable<T>({
   const end = Math.min(total, page * pageSize);
 
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200">
-      <div className="flex flex-col gap-4 border-b border-gray-200 p-4 sm:p-5">
-        {filters && <div className="flex flex-wrap gap-3">{filters}</div>}
+    <div className="overflow-hidden rounded-large bg-surface shadow-medium border border-border">
+      {/* Header com filtros e informações */}
+      <div className="flex flex-col gap-4 border-b border-border p-4 sm:p-6 bg-background-secondary">
+        {filters && (
+          <div className="flex flex-wrap gap-3">
+            {filters}
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-gray-500">
-            {total === 0 ? "Nenhum item" : `Exibindo ${start} - ${end} de ${total}`}
+          <p className="text-sm text-foreground-tertiary font-medium">
+            {total === 0 ? "Nenhum item encontrado" : `Exibindo ${start} - ${end} de ${total} itens`}
           </p>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>Tamanho da pagina</span>
+          <div className="flex items-center gap-2 text-sm text-foreground-tertiary">
+            <span className="font-medium">Itens por página:</span>
             <select
               value={pageSize}
               onChange={(event) => onPageSizeChange?.(Number(event.target.value))}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="rounded-medium border border-border bg-surface px-3 py-1.5 text-sm font-medium text-foreground transition-all duration-fast focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary hover:border-border-secondary"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -69,15 +74,19 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="relative">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      {/* Tabela */}
+      <div className="relative overflow-x-auto">
+        <table className="min-w-full divide-y divide-border">
+          <thead className="bg-background-tertiary">
             <tr>
               {columns.map((column) => (
                 <th
                   key={String(column.key)}
                   scope="col"
-                  className={["px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500", column.className]
+                  className={[
+                    "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-foreground-tertiary",
+                    column.className
+                  ]
                     .filter(Boolean)
                     .join(" ")}
                 >
@@ -86,17 +95,25 @@ export function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-border bg-surface">
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-gray-500">
-                  Carregando...
+                <td colSpan={columns.length} className="px-4 py-8 text-center">
+                  <div className="flex items-center justify-center gap-2 text-foreground-tertiary">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                    <span className="text-sm font-medium">Carregando dados...</span>
+                  </div>
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-gray-500">
-                  {emptyMessage}
+                <td colSpan={columns.length} className="px-4 py-8 text-center">
+                  <div className="text-foreground-tertiary">
+                    <svg className="mx-auto h-8 w-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-sm font-medium">{emptyMessage}</p>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -105,7 +122,12 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={rowId}
-                    className={onRowClick ? "cursor-pointer hover:bg-gray-50" : undefined}
+                    className={[
+                      "transition-colors duration-fast",
+                      onRowClick 
+                        ? "cursor-pointer hover:bg-background-secondary focus-within:bg-background-secondary" 
+                        : ""
+                    ].filter(Boolean).join(" ")}
                     onClick={() => onRowClick?.(row)}
                   >
                     {columns.map((column) => {
@@ -115,7 +137,10 @@ export function DataTable<T>({
                       return (
                         <td
                           key={String(column.key)}
-                          className={["px-4 py-3 text-sm text-gray-700", column.className]
+                          className={[
+                            "px-4 py-3 text-sm text-foreground-secondary",
+                            column.className
+                          ]
                             .filter(Boolean)
                             .join(" ")}
                         >
@@ -131,24 +156,27 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 p-4 text-sm text-gray-500">
-        <div>{total === 0 ? "Nenhuma pagina" : `Pagina ${page} de ${totalPages}`}</div>
+      {/* Footer com paginação */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-sm text-foreground-tertiary bg-background-secondary">
+        <div className="font-medium">
+          {total === 0 ? "Nenhuma página" : `Página ${page} de ${totalPages}`}
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => onPageChange?.(Math.max(1, page - 1))}
             disabled={page <= 1}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-medium border border-border px-3 py-1.5 text-sm font-medium text-foreground-secondary transition-all duration-fast hover:bg-surface hover:border-border-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-border disabled:hover:text-foreground-secondary focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            Anterior
+            ← Anterior
           </button>
           <button
             type="button"
             onClick={() => onPageChange?.(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-medium border border-border px-3 py-1.5 text-sm font-medium text-foreground-secondary transition-all duration-fast hover:bg-surface hover:border-border-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:border-border disabled:hover:text-foreground-secondary focus:outline-none focus:ring-2 focus:ring-primary"
           >
-            Proxima
+            Próxima →
           </button>
         </div>
       </div>

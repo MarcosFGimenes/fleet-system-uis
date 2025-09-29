@@ -1,4 +1,4 @@
-ï»¿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -11,15 +11,15 @@ const statusOptions: NcStatus[] = ["aberta", "em_execucao", "aguardando_peca", "
 
 const statusLabel: Record<NcStatus, string> = {
   aberta: "Aberta",
-  em_execucao: "Em execuÃ§Ã£o",
-  aguardando_peca: "Aguardando peÃ§a",
+  em_execucao: "Em execução",
+  aguardando_peca: "Aguardando peça",
   bloqueada: "Bloqueada",
   resolvida: "Resolvida",
 };
 
 const severityLabel: Record<Severity, string> = {
   alta: "Alta",
-  media: "MÃ©dia",
+  media: "Média",
   baixa: "Baixa",
 };
 
@@ -127,7 +127,7 @@ export default function NonConformityDetailPage() {
     setError(null);
     try {
       const response = await fetch(`/api/nc/${ncId}`);
-      if (!response.ok) throw new Error("Falha ao carregar informaÃ§Ãµes da NC");
+      if (!response.ok) throw new Error("Falha ao carregar informações da NC");
       const payload = await response.json();
       const nc = payload.data as NonConformity;
       setRecord(nc);
@@ -136,7 +136,7 @@ export default function NonConformityDetailPage() {
       setAudits(payload.audits as AuditEntry[]);
     } catch (err) {
       console.error(err);
-      setError("NÃ£o foi possÃ­vel carregar esta nÃ£o conformidade.");
+      setError("Não foi possível carregar esta não conformidade.");
     } finally {
       setLoading(false);
     }
@@ -155,14 +155,14 @@ export default function NonConformityDetailPage() {
     for (const action of record.actions ?? []) {
       if (action.startedAt) {
         events.push({
-          title: `AÃ§Ã£o ${action.type === "corretiva" ? "corretiva" : "preventiva"} iniciada`,
+          title: `Ação ${action.type === "corretiva" ? "corretiva" : "preventiva"} iniciada`,
           timestamp: action.startedAt,
           description: action.description,
         });
       }
       if (action.completedAt) {
         events.push({
-          title: `AÃ§Ã£o ${action.type === "corretiva" ? "corretiva" : "preventiva"} concluÃ­da`,
+          title: `Ação ${action.type === "corretiva" ? "corretiva" : "preventiva"} concluída`,
           timestamp: action.completedAt,
           description: action.description,
         });
@@ -233,11 +233,11 @@ export default function NonConformityDetailPage() {
         safetyRisk: draft.safetyRisk,
         impactAvailability: draft.impactAvailability,
       });
-      setFeedback({ type: "success", text: "NÃ£o conformidade atualizada." });
+      setFeedback({ type: "success", text: "Não conformidade atualizada." });
       setRefreshToken((prev) => prev + 1);
     } catch (err) {
       console.error(err);
-      setFeedback({ type: "error", text: "Erro ao salvar alteraÃ§Ãµes." });
+      setFeedback({ type: "error", text: "Erro ao salvar alterações." });
     } finally {
       setSaving(false);
     }
@@ -257,7 +257,7 @@ export default function NonConformityDetailPage() {
           <Alert variant="error" title="Erro" description={error} />
         ) : (
           <Card padding="lg">
-            <div className="text-sm text-[var(--hint)]">Carregando detalhes da nÃ£o conformidadeâ€¦</div>
+            <div className="text-sm text-gray-600">Carregando detalhes da não conformidade…</div>
           </Card>
         )}
       </div>
@@ -276,9 +276,9 @@ export default function NonConformityDetailPage() {
 
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold text-gray-900">{record.title}</h1>
-        <p className="text-sm text-[var(--hint)]">
+        <p className="text-sm text-gray-600">
           Ativo {record.linkedAsset.tag}
-          {record.linkedAsset.modelo ? ` â€¢ ${record.linkedAsset.modelo}` : ""}
+          {record.linkedAsset.modelo ? ` • ${record.linkedAsset.modelo}` : ""}
         </p>
       </div>
 
@@ -292,7 +292,7 @@ export default function NonConformityDetailPage() {
               <select
                 value={draft.status}
                 onChange={(event) => updateDraft({ status: event.target.value as NcStatus })}
-                className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 {statusOptions.map((option) => (
                   <option key={option} value={option}>
@@ -306,7 +306,7 @@ export default function NonConformityDetailPage() {
               <select
                 value={draft.severity}
                 onChange={(event) => updateDraft({ severity: event.target.value as Severity })}
-                className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               >
                 {severityOptions.map((option) => (
                   <option key={option} value={option}>
@@ -321,7 +321,7 @@ export default function NonConformityDetailPage() {
                 type="date"
                 value={draft.dueAt ? draft.dueAt.slice(0, 10) : ""}
                 onChange={(event) => updateDraft({ dueAt: event.target.value ? new Date(event.target.value).toISOString() : undefined })}
-                className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
             </label>
             <div className="flex items-center gap-4">
@@ -330,16 +330,16 @@ export default function NonConformityDetailPage() {
                   type="checkbox"
                   checked={draft.safetyRisk}
                   onChange={(event) => updateDraft({ safetyRisk: event.target.checked })}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-[var(--primary)]"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                Risco de seguranÃ§a
+                Risco de segurança
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
                   checked={draft.impactAvailability}
                   onChange={(event) => updateDraft({ impactAvailability: event.target.checked })}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-[var(--primary)]"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 Impacta disponibilidade
               </label>
@@ -350,7 +350,7 @@ export default function NonConformityDetailPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Causa raiz</h2>
               {requiresCapa && (!draft.rootCause || !draft.rootCause.trim()) && (
-                <span className="text-xs font-semibold text-red-600">ObrigatÃ³ria (recorrÃªncia)</span>
+                <span className="text-xs font-semibold text-red-600">Obrigatória (recorrência)</span>
               )}
             </div>
             <textarea
@@ -358,27 +358,27 @@ export default function NonConformityDetailPage() {
               onChange={(event) => updateDraft({ rootCause: event.target.value })}
               placeholder="Descreva a causa raiz identificada"
               rows={3}
-              className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Plano de aÃ§Ã£o (CAPA)</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Plano de ação (CAPA)</h2>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => addAction("corretiva")}
                   className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600 hover:bg-blue-100"
                 >
-                  + AÃ§Ã£o corretiva
+                  + Ação corretiva
                 </button>
                 <button
                   type="button"
                   onClick={() => addAction("preventiva")}
                   className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-100"
                 >
-                  + AÃ§Ã£o preventiva
+                  + Ação preventiva
                 </button>
               </div>
             </div>
@@ -386,30 +386,30 @@ export default function NonConformityDetailPage() {
             {draft.actions.length === 0 && (
               <Alert
                 variant="info"
-                description="Nenhuma aÃ§Ã£o cadastrada. Adicione aÃ§Ãµes corretivas e preventivas para acompanhar o CAPA."
+                description="Nenhuma ação cadastrada. Adicione ações corretivas e preventivas para acompanhar o CAPA."
               />
             )}
 
             <div className="space-y-3">
               {draft.actions.map((action) => (
-                <div key={action.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                <div key={action.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div className="flex items-center gap-2">
                       <select
                         value={action.type}
                         onChange={(event) => updateAction(action.id, { type: event.target.value as NcAction["type"] })}
-                        className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                        className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       >
                         <option value="corretiva">Corretiva</option>
                         <option value="preventiva">Preventiva</option>
                       </select>
                       {action.type === "preventiva" && (
-                        <label className="flex items-center gap-1 text-xs text-[var(--hint)]">
+                        <label className="flex items-center gap-1 text-xs text-gray-600">
                           <input
                             type="checkbox"
                             checked={action.effective ?? false}
                             onChange={(event) => updateAction(action.id, { effective: event.target.checked })}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-[var(--primary)]"
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
                           Eficaz
                         </label>
@@ -426,16 +426,16 @@ export default function NonConformityDetailPage() {
 
                   <div className="mt-3 space-y-3">
                     <label className="block text-xs uppercase tracking-wide text-gray-500">
-                      DescriÃ§Ã£o
+                      Descrição
                       <textarea
                         value={action.description}
                         onChange={(event) => updateAction(action.id, { description: event.target.value })}
                         rows={2}
-                        className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                        className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </label>
                     <label className="block text-xs uppercase tracking-wide text-gray-500">
-                      ResponsÃ¡vel
+                      Responsável
                       <input
                         value={action.owner?.nome ?? ""}
                         onChange={(event) =>
@@ -445,27 +445,27 @@ export default function NonConformityDetailPage() {
                               : undefined,
                           })
                         }
-                        placeholder="Nome do responsÃ¡vel"
-                        className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                        placeholder="Nome do responsável"
+                        className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                       />
                     </label>
                     <div className="grid gap-3 md:grid-cols-2">
                       <label className="block text-xs uppercase tracking-wide text-gray-500">
-                        InÃ­cio
+                        Início
                         <input
                           type="datetime-local"
                           value={toInputDateTime(action.startedAt)}
                           onChange={(event) => updateAction(action.id, { startedAt: fromInputDateTime(event.target.value) })}
-                          className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                          className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </label>
                       <label className="block text-xs uppercase tracking-wide text-gray-500">
-                        ConclusÃ£o
+                        Conclusão
                         <input
                           type="datetime-local"
                           value={toInputDateTime(action.completedAt)}
                           onChange={(event) => updateAction(action.id, { completedAt: fromInputDateTime(event.target.value) })}
-                          className="mt-1 w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                          className="mt-1 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         />
                       </label>
                     </div>
@@ -482,7 +482,7 @@ export default function NonConformityDetailPage() {
               disabled={saving}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {saving ? "Salvando..." : "Salvar alteraÃ§Ãµes"}
+              {saving ? "Salvando..." : "Salvar alterações"}
             </button>
             <button
               type="button"
@@ -494,7 +494,7 @@ export default function NonConformityDetailPage() {
             </button>
             {requiresCapa && (
               <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">
-                RecorrÃªncia exige CAPA completo
+                Recorrência exige CAPA completo
               </span>
             )}
           </div>
@@ -508,13 +508,13 @@ export default function NonConformityDetailPage() {
                 <p className="text-sm text-gray-500">Sem eventos registrados.</p>
               )}
               {timeline.map((event, index) => (
-                <div key={`${event.title}-${index}`} className="border-l border-[var(--border)] pl-4">
+                <div key={`${event.title}-${index}`} className="border-l border-gray-200 pl-4">
                   <div className="text-xs uppercase tracking-wide text-gray-400">
                     {formatDateTime(event.timestamp)}
                   </div>
                   <div className="text-sm font-medium text-gray-800">{event.title}</div>
                   {event.description && (
-                    <div className="text-sm text-[var(--hint)]">{event.description}</div>
+                    <div className="text-sm text-gray-600">{event.description}</div>
                   )}
                 </div>
               ))}
@@ -533,13 +533,13 @@ export default function NonConformityDetailPage() {
                 )}
                 {telemetry.odometerKm !== undefined && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500">OdÃ´metro (km)</dt>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Odômetro (km)</dt>
                     <dd className="font-medium">{telemetry.odometerKm.toLocaleString("pt-BR")}</dd>
                   </div>
                 )}
                 {telemetry.fuelUsedL !== undefined && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500">CombustÃ­vel (L)</dt>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Combustível (L)</dt>
                     <dd className="font-medium">{telemetry.fuelUsedL.toLocaleString("pt-BR")}</dd>
                   </div>
                 )}
@@ -557,7 +557,7 @@ export default function NonConformityDetailPage() {
                 )}
                 {telemetry.windowStart && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500">Janela inÃ­cio</dt>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Janela início</dt>
                     <dd className="font-medium">{dateFormatter.format(new Date(telemetry.windowStart))}</dd>
                   </div>
                 )}
@@ -576,19 +576,19 @@ export default function NonConformityDetailPage() {
           <Card padding="lg" className="space-y-4">
             <h2 className="text-lg font-semibold text-gray-900">Auditoria</h2>
             {audits.length === 0 ? (
-              <p className="text-sm text-gray-500">Sem registros de alteraÃ§Ã£o.</p>
+              <p className="text-sm text-gray-500">Sem registros de alteração.</p>
             ) : (
               <div className="space-y-3 text-sm text-gray-700">
                 {audits.map((audit) => (
-                  <div key={audit.id} className="rounded-lg border border-[var(--border)] bg-white p-3">
+                  <div key={audit.id} className="rounded-lg border border-gray-200 bg-white p-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-800">{audit.byNome ?? audit.byUserId ?? "UsuÃ¡rio"}</span>
+                      <span className="font-medium text-gray-800">{audit.byNome ?? audit.byUserId ?? "Usuário"}</span>
                       {audit.atISO && (
                         <span className="text-xs text-gray-500">{formatDateTime(audit.atISO)}</span>
                       )}
                     </div>
                     {audit.diff && (
-                      <ul className="mt-2 space-y-1 text-xs text-[var(--hint)]">
+                      <ul className="mt-2 space-y-1 text-xs text-gray-600">
                         {Object.entries(audit.diff).map(([field, change]) => (
                           <li key={field}>
                             <span className="font-semibold text-gray-700">{field}:</span> {String(change.before ?? "-")} ? {String(change.after ?? "-")}
@@ -606,4 +606,3 @@ export default function NonConformityDetailPage() {
     </div>
   );
 }
-

@@ -1,4 +1,4 @@
-import type { NcAction, NonConformity } from "@/types/nonconformity";
+﻿import type { NcAction, NonConformity } from "@/types/nonconformity";
 
 type TimeGranularity = "day" | "week";
 
@@ -150,8 +150,9 @@ export function groupByRootCause(records: NonConformity[]): Record<string, numbe
 
 export function groupBySystem(records: NonConformity[]): Record<string, number> {
   return records.reduce<Record<string, number>>((acc, record) => {
-    const key = record.systemCategory || "Nao classificado";
+    const key = record.systemCategory || "Não classificado";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
 }
+

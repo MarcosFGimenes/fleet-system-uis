@@ -111,7 +111,7 @@ export default function ResponseDetailPage() {
 
   if (loading) {
     return (
-      <div className="grid place-items-center min-h-[200px] text-[var(--muted)]">
+      <div className="grid place-items-center min-h-[200px] text-gray-300">
         Carregando...
       </div>
     );
@@ -119,7 +119,7 @@ export default function ResponseDetailPage() {
 
   if (loadError) {
     return (
-      <div className="grid place-items-center min-h-[200px] text-[var(--muted)]">
+      <div className="grid place-items-center min-h-[200px] text-gray-300">
         {loadError}
       </div>
     );
@@ -127,7 +127,7 @@ export default function ResponseDetailPage() {
 
   if (!response) {
     return (
-      <div className="grid place-items-center min-h-[200px] text-[var(--muted)]">
+      <div className="grid place-items-center min-h-[200px] text-gray-300">
         Checklist não encontrado.
       </div>
     );
@@ -240,7 +240,7 @@ export default function ResponseDetailPage() {
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <button
               onClick={() => router.back()}
-              className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-gray-500 hover:bg-[var(--surface)]"
+              className="rounded-lg border border-gray-700 px-4 py-2 text-sm transition hover:border-gray-500 hover:bg-gray-800"
             >
               Voltar
             </button>
@@ -254,9 +254,9 @@ export default function ResponseDetailPage() {
         </div>
       </header>
 
-      <section className="rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
+      <section className="rounded-2xl bg-gray-800 p-5 shadow-lg shadow-black/10">
         <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
+          <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4">
             <p className="text-xs uppercase tracking-wide text-gray-400">Máquina</p>
             <p className="mt-1 text-lg font-semibold text-white">{machine?.modelo ?? response.machineId}</p>
             <dl className="mt-2 space-y-1 text-xs text-gray-400">
@@ -270,7 +270,7 @@ export default function ResponseDetailPage() {
               </div>
             </dl>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
+          <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4">
             <p className="text-xs uppercase tracking-wide text-gray-400">Operador</p>
             <p className="mt-1 text-lg font-semibold text-white">
               {response.operatorNome ?? "Não informado"}
@@ -279,7 +279,7 @@ export default function ResponseDetailPage() {
               Matrícula: {response.operatorMatricula ?? "-"}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
+          <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4">
             <p className="text-xs uppercase tracking-wide text-gray-400">Template</p>
             <p className="mt-1 text-lg font-semibold text-white">
               {template?.title ?? response.templateId}
@@ -288,7 +288,7 @@ export default function ResponseDetailPage() {
               {template ? `${template.type} · versão ${template.version}` : ""}
             </p>
           </div>
-          <div className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4">
+          <div className="rounded-xl border border-gray-700 bg-gray-900/40 p-4">
             <p className="text-xs uppercase tracking-wide text-gray-400">Leituras</p>
             <p className="mt-1 text-lg font-semibold text-white">
               {response.km != null ? `KM ${response.km}` : "-"}
@@ -300,7 +300,7 @@ export default function ResponseDetailPage() {
       </section>
 
       {nonConformities.length > 0 && (
-        <section className="space-y-4 rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
+        <section className="space-y-4 rounded-2xl bg-gray-800 p-5 shadow-lg shadow-black/10">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold text-white">Tratativas de não conformidade</h2>
             <button
@@ -359,7 +359,7 @@ export default function ResponseDetailPage() {
                       )}
                       {answer.observation && (
                         <p className="mt-3 text-sm text-gray-200">
-                          Observações do operador: <span className="text-[var(--muted)]">{answer.observation}</span>
+                          Observações do operador: <span className="text-gray-300">{answer.observation}</span>
                         </p>
                       )}
                     </div>
@@ -377,7 +377,7 @@ export default function ResponseDetailPage() {
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="flex flex-col gap-2 text-sm">
-                      <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                      <span className="text-xs uppercase tracking-wide text-gray-300">
                         Tratativa planejada
                       </span>
                       <textarea
@@ -388,12 +388,12 @@ export default function ResponseDetailPage() {
                           })
                         }
                         placeholder="Descreva a ação corretiva e preventiva"
-                        className="min-h-[96px] resize-y rounded-lg border border-gray-700 bg-[var(--surface)] p-3 text-sm text-white placeholder:text-gray-500 focus:border-[var(--primary)] focus:outline-none"
+                        className="min-h-[96px] resize-y rounded-lg border border-gray-700 bg-gray-900/60 p-3 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
                       />
                     </label>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <label className="flex flex-col gap-2 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-gray-300">
                           Responsável
                         </span>
                         <input
@@ -404,11 +404,11 @@ export default function ResponseDetailPage() {
                             })
                           }
                           placeholder="Nome do responsável"
-                          className="rounded-lg border border-gray-700 bg-[var(--surface)] px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-[var(--primary)] focus:outline-none"
+                          className="rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
                         />
                       </label>
                       <label className="flex flex-col gap-2 text-sm">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-gray-300">
                           Prazo
                         </span>
                         <input
@@ -419,11 +419,11 @@ export default function ResponseDetailPage() {
                               deadline: event.target.value || undefined,
                             })
                           }
-                          className="rounded-lg border border-gray-700 bg-[var(--surface)] px-3 py-2 text-sm text-white focus:border-[var(--primary)] focus:outline-none"
+                          className="rounded-lg border border-gray-700 bg-gray-900/60 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
                         />
                       </label>
                       <label className="flex flex-col gap-2 text-sm sm:col-span-2">
-                        <span className="text-xs uppercase tracking-wide text-[var(--muted)]">
+                        <span className="text-xs uppercase tracking-wide text-gray-300">
                           Status
                         </span>
                         <div className="flex flex-wrap gap-2">
@@ -439,7 +439,7 @@ export default function ResponseDetailPage() {
                               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                                 treatment.status === status
                                   ? "bg-blue-600 text-white"
-                                  : "bg-[var(--surface)] text-[var(--muted)] hover:bg-gray-700"
+                                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
                               }`}
                             >
                               {statusLabel[status]}
@@ -456,13 +456,13 @@ export default function ResponseDetailPage() {
         </section>
       )}
 
-      <section className="space-y-4 rounded-2xl bg-[var(--surface)] p-5 shadow-lg shadow-black/10">
+      <section className="space-y-4 rounded-2xl bg-gray-800 p-5 shadow-lg shadow-black/10">
         <h2 className="text-lg font-semibold text-white">Respostas do checklist</h2>
         <div className="grid grid-cols-1 gap-4">
           {response.answers.map((answer, index) => (
             <article
               key={answer.questionId}
-              className="rounded-xl border border-gray-700 bg-[var(--surface)] p-4 transition hover:border-gray-500"
+              className="rounded-xl border border-gray-700 bg-gray-900/40 p-4 transition hover:border-gray-500"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-2">
@@ -485,7 +485,7 @@ export default function ResponseDetailPage() {
                       : "Não se aplica"}
                   </span>
                   {answer.observation && (
-                    <p className="text-sm text-[var(--muted)]">Observações: {answer.observation}</p>
+                    <p className="text-sm text-gray-300">Observações: {answer.observation}</p>
                   )}
                 </div>
                 {answer.photoUrl && (

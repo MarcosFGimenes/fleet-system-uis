@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Gestao de Frota",
-  description: "Gestao de checklists e nao conformidades da frota",
+  title: "Gestão de Frota - Sistema de Manutenção",
+  description: "Sistema moderno para gestão de checklists, não conformidades e manutenção da frota",
+  keywords: ["gestão", "frota", "manutenção", "checklist", "não conformidades"],
+  authors: [{ name: "Gestão de Frota" }],
+  viewport: "width=device-width, initial-scale=1",
+  themeColor: "#2563EB",
 };
 
 export default function RootLayout({
@@ -24,10 +24,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className="light">
+      <head>
+        <meta name="color-scheme" content="light" />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-gray-50 text-gray-900 antialiased`}
+        className={`${inter.variable} bg-background text-foreground antialiased font-sans`}
       >
-        {children}
+        <div className="min-h-screen flex flex-col">
+          {children}
+        </div>
       </body>
     </html>
   );
