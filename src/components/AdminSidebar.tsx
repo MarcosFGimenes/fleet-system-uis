@@ -12,42 +12,38 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { href: "/admin", label: "Início" },
-  { href: "/admin/analytics", label: "KPIs", badge: "Gráficos de perfomance" },
-  { href: "/admin/machines", label: "Máquinas", badge: "Gerenciar cadastros" },
-  { href: "/admin/templates", label: "Templates", badge: "modelos de checklist" },
-  { href: "/admin/responses", label: "Checklists", badge: "Listar CL realizados" },
-  { href: "/admin/non-conformities", label: "Não Conformidades", badge: "Gerenciar NC's" },
-  { href: "/admin/users", label: "Usuários", badge: "em breve" },
+  { href: "/admin", label: "Inicio" },
+  { href: "/admin/analytics", label: "KPIs", badge: "Performance" },
+  { href: "/admin/machines", label: "Maquinas", badge: "Cadastros" },
+  { href: "/admin/templates", label: "Templates", badge: "Modelos" },
+  { href: "/admin/responses", label: "Checklists", badge: "Historico" },
+  { href: "/admin/non-conformities", label: "Nao conformidades", badge: "NCs" },
+  { href: "/admin/users", label: "Usuarios", badge: "Em breve", disabled: true },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const Item = ({ href, label, badge, disabled }: NavItem) => {
-    const active =
-      pathname === href ||
-      (href !== "/admin" && pathname?.startsWith(href));
+  const renderItem = (item: NavItem) => {
+    const active = pathname === item.href || (item.href !== "/admin" && pathname?.startsWith(item.href));
+    const baseClass = "flex items-center justify-between rounded-lg px-3 py-2 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+    const stateClass = active
+      ? "bg-blue-50 text-blue-600"
+      : "text-gray-600 hover:bg-gray-50 hover:text-blue-600";
 
     return (
-      <li>
+      <li key={item.href}>
         <Link
-          aria-disabled={disabled}
-          href={disabled ? pathname ?? "/admin" : href}
+          href={item.disabled ? pathname ?? "/admin" : item.href}
+          aria-disabled={item.disabled}
           onClick={() => setOpen(false)}
-          className={[
-            "flex items-center justify-between rounded-lg px-3 py-2 text-sm transition",
-            active
-              ? "bg-gray-800 text-white"
-              : "text-gray-300 hover:bg-gray-800 hover:text-white",
-            disabled ? "opacity-50 pointer-events-none" : "",
-          ].join(" ")}
+          className={[baseClass, stateClass, item.disabled ? "pointer-events-none opacity-50" : ""].join(" ")}
         >
-          <span>{label}</span>
-          {badge && (
-            <span className="text-[10px] uppercase bg-gray-700 px-2 py-0.5 rounded-md tracking-wide">
-              {badge}
+          <span className="font-medium">{item.label}</span>
+          {item.badge && (
+            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              {item.badge}
             </span>
           )}
         </Link>
@@ -57,49 +53,39 @@ export default function AdminSidebar() {
 
   return (
     <>
-      <div className="md:hidden sticky top-0 z-30 bg-gray-900/80 backdrop-blur border-b border-gray-800">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="px-3 py-2 rounded-md bg-gray-800 hover:bg-gray-700 text-sm"
-          >
-            {open ? "Fechar Menu" : "Abrir Menu"}
-          </button>
-          <div className="text-sm text-gray-300">Painel Admin</div>
-        </div>
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-3 shadow-sm md:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="rounded-md border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 shadow-sm"
+        >
+          {open ? "Fechar menu" : "Abrir menu"}
+        </button>
+        <div className="text-sm font-semibold text-gray-600">Admin</div>
       </div>
 
       {open && (
-        <div className="md:hidden fixed inset-0 z-40">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setOpen(false)}
-          />
-          <aside className="absolute left-0 top-0 h-full w-72 bg-gray-900 border-r border-gray-800 p-4">
+        <div className="fixed inset-0 z-30 md:hidden">
+          <div className="absolute inset-0 bg-gray-900/40" onClick={() => setOpen(false)} />
+          <aside className="absolute left-0 top-0 h-full w-72 overflow-y-auto border-r border-gray-200 bg-white p-4 shadow-xl">
             <Brand />
-            <nav className="mt-4">
+            <nav className="mt-6">
               <ul className="space-y-1">
-                {NAV.map((item) => (
-                  <Item key={item.href} {...item} />
-                ))}
+                {NAV.map((item) => renderItem(item))}
               </ul>
             </nav>
           </aside>
         </div>
       )}
 
-      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:w-72 bg-gray-900 border-r border-gray-800 p-4">
+      <aside className="fixed inset-y-0 hidden w-72 overflow-y-auto border-r border-gray-200 bg-white px-4 py-6 md:flex md:flex-col">
         <Brand />
-        <nav className="mt-4">
-          <ul className="space-y-1">
-            {NAV.map((item) => (
-              <Item key={item.href} {...item} />
-            ))}
+        <nav className="mt-6">
+          <ul className="space-y-1 text-sm text-gray-600">
+            {NAV.map((item) => renderItem(item))}
           </ul>
         </nav>
-        <footer className="mt-auto pt-4 text-[11px] text-gray-500">
-          Cooperativa • Gestão de Frota
-        </footer>
+        <footer className="mt-auto pt-8 text-xs text-gray-400">Gestao de Frota - Admin</footer>
       </aside>
     </>
   );
@@ -108,10 +94,12 @@ export default function AdminSidebar() {
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="size-8 rounded-lg bg-blue-600 grid place-items-center font-bold">GF</div>
+      <div className="grid size-9 place-items-center rounded-xl bg-blue-600 text-base font-semibold text-white shadow-sm">
+        GF
+      </div>
       <div>
-        <p className="text-sm font-semibold text-white">Gestão de Frota</p>
-        <p className="text-xs text-gray-400">Admin</p>
+        <p className="text-sm font-semibold text-gray-900">Gestao de Frota</p>
+        <p className="text-xs text-gray-500">Centro de manutencao</p>
       </div>
     </div>
   );

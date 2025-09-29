@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gestão de Frota",
-  description: "Gestão de checklists e não conformidades da frota",
+  title: "Gestao de Frota",
+  description: "Gestao de checklists e nao conformidades da frota",
 };
 
 export default function RootLayout({

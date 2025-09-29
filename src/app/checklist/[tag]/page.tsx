@@ -14,8 +14,7 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { Machine } from "@/types/machine";
 import type {
   ChecklistAnswer,
@@ -23,18 +22,19 @@ import type {
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
+import { useUserLookup } from "@/hooks/useUserLookup";
+import { useNotification } from "@/hooks/useNotification";
+import Notification from "@/components/Notification";
+import Spinner from "@/components/Spinner";
+
+// -----------------
+// Tipagens locais
+// -----------------
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-type LookupState = "idle" | "searching" | "found" | "not_found" | "error";
 
 type Params = {
   tag: string;
-};
-
-type CachedUser = {
-  id: string;
-  matricula: string;
-  nome: string;
 };
 
 type AnswerDraft = {
@@ -44,7 +44,6 @@ type AnswerDraft = {
 };
 
 type AnswerMap = Record<string, AnswerDraft>;
-type PhotoMap = Record<string, File | null>;
 
 type PreviousResponseMeta = {
   id: string;
@@ -53,14 +52,10 @@ type PreviousResponseMeta = {
 
 type PreviousNcMap = Record<string, ChecklistAnswer>;
 
-type UserLookup = {
-  state: LookupState;
-  message: string;
-};
-
-const initialLookup: UserLookup = {
-  state: "idle",
-  message: "",
+type ExtraNc = {
+  title: string;
+  description?: string;
+  severity?: "baixa" | "media" | "alta";
 };
 
 export default function ChecklistByTagPage() {
@@ -73,12 +68,10 @@ export default function ChecklistByTagPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   const [matricula, setMatricula] = useState("");
-  const [nome, setNome] = useState("");
   const [km, setKm] = useState("");
   const [horimetro, setHorimetro] = useState("");
 
   const [answers, setAnswers] = useState<AnswerMap>({});
-  const [photos, setPhotos] = useState<PhotoMap>({});
 
   const [previousResponseMeta, setPreviousResponseMeta] =
     useState<PreviousResponseMeta | null>(null);
@@ -88,15 +81,20 @@ export default function ChecklistByTagPage() {
   const [recurrenceDecisions, setRecurrenceDecisions] = useState<
     Record<string, ChecklistRecurrenceStatus | undefined>
   >({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [userLookup, setUserLookup] = useState<UserLookup>(initialLookup);
-  const [userInfo, setUserInfo] = useState<CachedUser | null>(null);
+  const [extraNcs, setExtraNcs] = useState<ExtraNc[]>([]);
+
+  const { userLookup, userInfo, nome, setNome } = useUserLookup(matricula);
+  const { notification, showNotification, hideNotification } = useNotification();
 
   const machinesCol = useMemo(() => collection(db, "machines"), []);
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
-  const usersCol = useMemo(() => collection(db, "users"), []);
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
 
+  // -----------------
+  // Carregamento inicial
+  // -----------------
   useEffect(() => {
     const load = async () => {
       try {
@@ -108,7 +106,7 @@ export default function ChecklistByTagPage() {
         );
         const machineSnap = await getDocs(machineQuery);
         if (machineSnap.empty) {
-          throw new Error("Maquina nao encontrada pelo QR ou TAG.");
+          throw new Error("Máquina não encontrada pelo QR ou TAG.");
         }
         const machineDoc = machineSnap.docs[0];
         const machineData = {
@@ -126,15 +124,11 @@ export default function ChecklistByTagPage() {
                 id: tplSnap.id,
                 ...(tplSnap.data() as Omit<ChecklistTemplate, "id">),
               } as ChecklistTemplate;
-              if (tpl.isActive) {
-                fetched.push(tpl);
-              }
+              if (tpl.isActive) fetched.push(tpl);
             }
           }
           setTemplates(fetched);
-          if (fetched.length > 0) {
-            setSelectedTemplateId(fetched[0].id);
-          }
+          if (fetched.length > 0) setSelectedTemplateId(fetched[0].id);
         } else {
           setTemplates([]);
         }
@@ -152,74 +146,15 @@ export default function ChecklistByTagPage() {
     };
 
     load();
-  }, [machinesCol, tag, templatesCol]);
-
-  useEffect(() => {
-    const trimmed = matricula.trim();
-
-    if (!trimmed) {
-      setUserLookup(initialLookup);
-      setUserInfo(null);
-      setNome("");
-      return;
-    }
-
-    setUserLookup({ state: "searching", message: "" });
-
-    let cancelled = false;
-    const timeoutId = setTimeout(async () => {
-      try {
-        const userQuery = query(usersCol, where("matricula", "==", trimmed));
-        const userSnap = await getDocs(userQuery);
-        if (cancelled) return;
-
-        if (userSnap.empty) {
-          setUserLookup({ state: "not_found", message: "Matricula nao cadastrada." });
-          setUserInfo(null);
-          setNome("");
-          sessionStorage.removeItem("matricula");
-          sessionStorage.removeItem("nome");
-          return;
-        }
-
-        const docSnap = userSnap.docs[0];
-        const data = docSnap.data() as { nome?: string };
-        const resolvedNome = data.nome?.trim() ?? "";
-
-        const cached: CachedUser = {
-          id: docSnap.id,
-          matricula: trimmed,
-          nome: resolvedNome,
-        };
-
-        setUserInfo(cached);
-        setNome(resolvedNome);
-        setUserLookup({ state: "found", message: "" });
-        sessionStorage.setItem("matricula", trimmed);
-        if (resolvedNome) {
-          sessionStorage.setItem("nome", resolvedNome);
-        } else {
-          sessionStorage.removeItem("nome");
-        }
-      } catch (error) {
-        if (cancelled) return;
-        console.error(error);
-        setUserLookup({ state: "error", message: "Erro ao buscar a matricula." });
-        setUserInfo(null);
-        setNome("");
-      }
-    }, 300);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-    };
-  }, [matricula, usersCol]);
+  }, [machinesCol, tag, templatesCol, setNome]);
 
   const currentTemplate = useMemo(() => {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
+  // -----------------
+  // Buscar último checklist para recorrência
+  // -----------------
   useEffect(() => {
     let cancelled = false;
 
@@ -243,13 +178,11 @@ export default function ChecklistByTagPage() {
           where("machineId", "==", machine.id),
           where("templateId", "==", currentTemplate.id),
           orderBy("createdAt", "desc"),
-          limit(1),
+          limit(1)
         );
 
         const previousSnap = await getDocs(previousQuery);
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
 
         if (previousSnap.empty) {
           setPreviousResponseMeta(null);
@@ -280,83 +213,66 @@ export default function ChecklistByTagPage() {
         if (!cancelled) {
           setPreviousResponseMeta(null);
           setPreviousNcMap({});
-          setPreviousError("Não foi possível verificar o checklist anterior deste equipamento.");
+          setPreviousError(
+            "Não foi possível verificar o checklist anterior deste equipamento."
+          );
         }
       } finally {
-        if (!cancelled) {
-          setPreviousLoading(false);
-        }
+        if (!cancelled) setPreviousLoading(false);
       }
     };
 
     void fetchPrevious();
-
     return () => {
       cancelled = true;
     };
   }, [machine, currentTemplate, responsesCol]);
 
+  // Reset ao trocar de template
   useEffect(() => {
     setAnswers({});
-    setPhotos({});
     setRecurrenceDecisions({});
     setPreviousNcMap({});
     setPreviousResponseMeta(null);
     setPreviousError(null);
   }, [selectedTemplateId]);
 
+  // -----------------
+  // Helpers de estado
+  // -----------------
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
-    setAnswers((prev) => {
-      const current = prev[questionId] ?? { questionId };
-      return {
-        ...prev,
-        [questionId]: {
-          ...current,
-          questionId,
-          response: value,
-        },
-      };
-    });
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] ?? { questionId }), response: value },
+    }));
   };
 
   const setObservation = (questionId: string, value: string) => {
-    setAnswers((prev) => {
-      const current = prev[questionId] ?? { questionId };
-      return {
-        ...prev,
-        [questionId]: {
-          ...current,
-          questionId,
-          observation: value,
-        },
-      };
-    });
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] ?? { questionId }), observation: value },
+    }));
   };
 
   const setRecurrenceDecision = (
     questionId: string,
-    status: ChecklistRecurrenceStatus,
+    status: ChecklistRecurrenceStatus
   ) => {
-    setRecurrenceDecisions((prev) => ({
-      ...prev,
-      [questionId]: status,
-    }));
+    setRecurrenceDecisions((prev) => ({ ...prev, [questionId]: status }));
   };
 
-  const onPhotoChange = (questionId: string, file: File | null) => {
-    setPhotos((prev) => ({
-      ...prev,
-      [questionId]: file,
-    }));
-  };
-
+  // -----------------
+  // Validação de usuário
+  // -----------------
   const validateUser = async () => {
     const trimmed = matricula.trim();
     if (!trimmed) {
-      throw new Error("Informe a matricula.");
+      showNotification("Informe a matrícula.", "error");
+      throw new Error("Informe a matrícula.");
     }
     if (!userInfo || userLookup.state !== "found" || userInfo.matricula !== trimmed) {
-      throw new Error("Matricula nao cadastrada ou permitida.");
+      showNotification("Matrícula não cadastrada ou permitida.", "error");
+      throw new Error("Matrícula não cadastrada ou permitida.");
     }
     return {
       userId: userInfo.id,
@@ -364,89 +280,59 @@ export default function ChecklistByTagPage() {
     };
   };
 
+  // -----------------
+  // Envio
+  // -----------------
   const handleSubmit = async () => {
-    if (!machine || !currentTemplate) {
-      return;
-    }
+    if (!machine || !currentTemplate) return;
 
+    setIsSubmitting(true);
     try {
       const { userId, nome: nomeResolved } = await validateUser();
 
       const previousNcIds = Object.keys(previousNcMap);
       if (previousNcIds.length && previousResponseMeta) {
         const unansweredRecurrence = previousNcIds.filter(
-          (questionId) => previousNcMap[questionId] && !recurrenceDecisions[questionId],
+          (questionId) => previousNcMap[questionId] && !recurrenceDecisions[questionId]
         );
 
         if (unansweredRecurrence.length) {
           const missingQuestions = unansweredRecurrence
-            .map((questionId) =>
-              currentTemplate.questions.find((question) => question.id === questionId)?.text || questionId,
+            .map(
+              (questionId) =>
+                currentTemplate.questions.find((q) => q.id === questionId)?.text ||
+                questionId
             )
             .join(", ");
 
-          alert(
+          showNotification(
             `Informe se as não conformidades anteriores foram resolvidas para: ${missingQuestions}.`,
+            "warning"
           );
           return;
         }
       }
 
       const missing = currentTemplate.questions.filter(
-        (question) => !answers[question.id]?.response
+        (q) => !answers[q.id]?.response
       );
       if (missing.length) {
-        alert(`Responda todas as perguntas (${missing.length} faltando).`);
-        return;
-      }
-
-      const photoIssues = currentTemplate.questions.filter((question) => {
-        const base = answers[question.id];
-        return (
-          base?.response === "nc" &&
-          question.requiresPhoto &&
-          !photos[question.id]
-        );
-      });
-      if (photoIssues.length) {
-        alert(
-          `Foto obrigatoria para perguntas marcadas como NC: ${photoIssues
-            .map((question) => question.text)
-            .join(", ")}`
-        );
+        showNotification(`Responda todas as perguntas (${missing.length} faltando).`, "warning");
         return;
       }
 
       const uploadedAnswers: ChecklistAnswer[] = [];
       for (const question of currentTemplate.questions) {
         const base = answers[question.id];
-        if (!base || !base.response) {
-          continue;
-        }
-
-        let photoUrl: string | undefined = undefined;
-        const file = photos[question.id] || null;
-
-        if (file) {
-          const path = `checklists/${machine.id}/${currentTemplate.id}/${Date.now()}-${question.id}-${file.name}`;
-          const bucketRef = ref(storage, path);
-          await uploadBytes(bucketRef, file);
-          photoUrl = await getDownloadURL(bucketRef);
-        }
+        if (!base || !base.response) continue;
 
         const answer: ChecklistAnswer = {
           questionId: question.id,
           response: base.response,
         };
 
-        if (photoUrl !== undefined) {
-          answer.photoUrl = photoUrl;
-        }
-
         const observationText = base.observation?.trim();
-        if (observationText) {
-          answer.observation = observationText;
-        }
+        if (observationText) answer.observation = observationText;
 
         if (previousResponseMeta && previousNcMap[question.id]) {
           const recurrenceStatus = recurrenceDecisions[question.id];
@@ -480,41 +366,54 @@ export default function ChecklistByTagPage() {
 
       if (kmValue !== "") {
         const kmNumber = Number(kmValue);
-        if (!Number.isNaN(kmNumber)) {
-          payload.km = kmNumber;
-        }
+        if (!Number.isNaN(kmNumber)) payload.km = kmNumber;
       }
-
       if (horimetroValue !== "") {
         const horimetroNumber = Number(horimetroValue);
-        if (!Number.isNaN(horimetroNumber)) {
-          payload.horimetro = horimetroNumber;
-        }
+        if (!Number.isNaN(horimetroNumber)) payload.horimetro = horimetroNumber;
       }
+
+      // Anexa NCs extras (se houver título preenchido)
+      const extras = extraNcs
+        .map((e) => ({
+          title: e.title?.trim(),
+          description: e.description?.trim() || undefined,
+          severity: e.severity || undefined,
+        }))
+        .filter((e) => Boolean(e.title));
+      if (extras.length) (payload as any).extraNonConformities = extras;
 
       await addDoc(responsesCol, payload);
 
-      alert("Checklist enviado com sucesso!");
+      showNotification("Checklist enviado com sucesso!", "success");
       router.push("/login");
     } catch (error) {
       console.error(error);
-      alert((error as Error)?.message || "Erro ao enviar checklist.");
+      showNotification("Erro ao enviar checklist. Tente novamente.", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  // -----------------
+  // Render
+  // -----------------
   if (state === "loading") {
     return (
-      <div className="min-h-screen grid place-items-center bg-gray-900 text-white">
-        Carregando checklist...
+      <div className="min-h-screen grid place-items-center bg-gray-100 text-gray-800">
+        <div className="flex items-center gap-3">
+          <Spinner />
+          <p>Carregando checklist…</p>
+        </div>
       </div>
     );
   }
 
   if (state === "error" || !machine) {
     return (
-      <div className="min-h-screen grid place-items-center bg-gray-900 text-white">
-        <div className="bg-gray-800 p-6 rounded-xl">
-          <p className="text-red-400 font-semibold">Maquina nao encontrada pelo QR ou TAG.</p>
+      <div className="min-h-screen grid place-items-center bg-gray-100 text-gray-800">
+        <div className="bg-white p-6 rounded-xl shadow-md">
+          <p className="text-red-600 font-semibold">Máquina não encontrada pelo QR ou TAG.</p>
         </div>
       </div>
     );
@@ -529,113 +428,153 @@ export default function ChecklistByTagPage() {
       ? previousChecklistDate.toLocaleString()
       : null;
 
-  const submitDisabled = !currentTemplate || userLookup.state !== "found";
+  const submitDisabled = !currentTemplate || userLookup.state !== "found" || isSubmitting;
+
+  // Botão padrão
+  const ChoiceBtn = ({
+    active,
+    children,
+    onClick,
+    tone = "neutral",
+  }: {
+    active: boolean;
+    children: React.ReactNode;
+    onClick: () => void;
+    tone?: "neutral" | "ok" | "nc" | "na";
+  }) => {
+    const base =
+      "px-4 py-2 rounded-md text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2";
+    const tones: Record<string, string> = {
+      ok: active
+        ? "bg-emerald-600 text-white focus:ring-emerald-600"
+        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-emerald-600",
+      nc: active
+        ? "bg-red-600 text-white focus:ring-red-600"
+        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-red-600",
+      na: active
+        ? "bg-gray-600 text-white focus:ring-gray-600"
+        : "bg-gray-100 text-gray-800 hover:bg-gray-200 focus:ring-gray-600",
+      neutral: "bg-gray-100 text-gray-800 hover:bg-gray-200",
+    };
+    return (
+      <button className={`${base} ${tones[tone]}`} onClick={onClick} type="button">
+        {children}
+      </button>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-4">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-4">
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* Cabeçalho */}
         <header className="space-y-1">
-          <h1 className="text-2xl font-bold">Checklist - {machine.modelo}</h1>
-          <p className="text-sm text-gray-400">
-            TAG: <code className="bg-gray-800 px-2 py-1 rounded border border-gray-700">{machine.tag}</code>
+          <h1 className="text-2xl font-bold">Checklist – {machine.modelo}</h1>
+          <p className="text-sm text-gray-600">
+            TAG: <code className="rounded bg-gray-200 px-2 py-0.5 text-gray-800 border border-gray-300">{machine.tag}</code>
           </p>
         </header>
 
-        <section className="bg-gray-800 p-4 rounded-xl space-y-3">
-          <h2 className="font-semibold">Identificacao</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm">Matricula</label>
+        {/* Identificação */}
+        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+          <h2 className="font-semibold">Identificação</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <label className="text-sm text-gray-600">Matrícula</label>
               <input
                 value={matricula}
-                onChange={(event) => setMatricula(event.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+                onChange={(e) => setMatricula(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ex: 1001"
                 inputMode="numeric"
               />
               {userLookup.state === "searching" && (
-                <p className="text-xs text-gray-400 mt-1">Buscando matricula...</p>
+                <p className="text-xs text-gray-500">Buscando matrícula…</p>
               )}
               {userLookup.state === "not_found" && (
-                <p className="text-xs text-red-400 mt-1">{userLookup.message}</p>
+                <p className="text-xs text-red-600">{userLookup.message}</p>
               )}
               {userLookup.state === "error" && (
-                <p className="text-xs text-red-400 mt-1">{userLookup.message}</p>
+                <p className="text-xs text-red-600">{userLookup.message}</p>
               )}
               {userLookup.state === "found" && nome && (
-                <p className="text-xs text-emerald-400 mt-1">Operador encontrado.</p>
+                <p className="text-xs text-emerald-600">Operador encontrado.</p>
               )}
             </div>
-            <div>
-              <label className="text-sm">Nome do operador</label>
+            <div className="space-y-1">
+              <label className="text-sm text-gray-600">Nome do operador</label>
               <input
                 value={nome}
                 readOnly
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-gray-300"
+                className="w-full rounded-md border border-gray-200 bg-gray-100 px-3 py-2 text-gray-600"
                 placeholder="Preenchido automaticamente"
               />
             </div>
           </div>
         </section>
 
-        <section className="bg-gray-800 p-4 rounded-xl space-y-3">
-          <h2 className="font-semibold">Dados da operacao</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="text-sm">KM (se aplicavel)</label>
+        {/* Dados de operação */}
+        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+          <h2 className="font-semibold">Dados da operação</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <label className="text-sm text-gray-600">KM</label>
               <input
                 type="number"
                 value={km}
-                onChange={(event) => setKm(event.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+                onChange={(e) => setKm(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div>
-              <label className="text-sm">Horimetro (se aplicavel)</label>
+            <div className="space-y-1">
+              <label className="text-sm text-gray-600">Horímetro</label>
               <input
                 type="number"
                 value={horimetro}
-                onChange={(event) => setHorimetro(event.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+                onChange={(e) => setHorimetro(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
-            <div>
-              <label className="text-sm">Tipo de checklist</label>
+            <div className="space-y-1">
+              <label className="text-sm text-gray-600">Tipo de checklist</label>
               <select
                 value={selectedTemplateId}
-                onChange={(event) => setSelectedTemplateId(event.target.value)}
-                className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>
-                    {template.title} (v{template.version})
-                  </option>
-                ))}
-                {templates.length === 0 && <option>Sem templates vinculados</option>}
+                {templates.length > 0 ? (
+                  templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.title} (v{t.version})
+                    </option>
+                  ))
+                ) : (
+                  <option>Sem templates vinculados</option>
+                )}
               </select>
             </div>
           </div>
         </section>
 
-        <section className="bg-gray-800 p-4 rounded-xl space-y-4">
+        {/* Perguntas */}
+        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-4">
           <h2 className="font-semibold">Perguntas</h2>
 
           {currentTemplate ? (
             <div className="space-y-4">
               {previousLoading && (
-                <div className="rounded-lg border border-gray-700 bg-gray-900/60 p-3 text-sm text-gray-300">
-                  Verificando checklist anterior...
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  Verificando checklist anterior…
                 </div>
               )}
 
               {!previousLoading && previousError && (
-                <div className="rounded-lg border border-red-700/60 bg-red-900/30 p-3 text-sm text-red-200">
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                   {previousError}
                 </div>
               )}
 
               {!previousLoading && !previousError && hasPreviousNc && (
-                <div className="rounded-lg border border-amber-500/60 bg-amber-500/10 p-3 text-sm text-amber-100">
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                   Encontramos não conformidades no checklist anterior
                   {previousChecklistDateLabel ? ` (${previousChecklistDateLabel})` : ""}. Informe se cada item foi
                   resolvido ou permanece em não conformidade.
@@ -648,27 +587,26 @@ export default function ChecklistByTagPage() {
                 const isRecurrence = Boolean(previousNc);
 
                 return (
-                  <div
-                    key={question.id}
-                    className={[
-                      "space-y-3 rounded-lg border p-3 transition-colors",
-                      isRecurrence ? "border-amber-500/70 bg-amber-500/5" : "border-gray-700 bg-gray-900",
-                    ].join(" ")}
-                  >
-                    <p className="font-medium">
-                      {index + 1}. {question.text}
-                    </p>
+                  <div key={question.id} className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <p className="font-medium text-gray-900">
+                        <span className="mr-2 rounded-full bg-gray-100 px-2 py-0.5 text-sm text-gray-600">
+                          {String(index + 1).padStart(2, "0")}
+                        </span>
+                        {question.text}
+                      </p>
+                    </div>
 
                     {isRecurrence && (
-                      <div className="space-y-2 rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-100">
+                      <div className="mt-3 space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                         <p>
                           Este item foi marcado como não conforme no checklist anterior
                           {previousChecklistDateLabel ? ` (${previousChecklistDateLabel})` : ""}. Informe se a não
                           conformidade foi resolvida.
                         </p>
                         {previousNc?.observation && (
-                          <p className="text-xs text-amber-200/80">
-                            Observação anterior: <span className="text-amber-100">{previousNc.observation}</span>
+                          <p className="text-xs text-amber-700/80">
+                            Observação anterior: <span className="text-amber-800">{previousNc.observation}</span>
                           </p>
                         )}
                         {previousNc?.photoUrl && (
@@ -676,12 +614,12 @@ export default function ChecklistByTagPage() {
                             href={previousNc.photoUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex text-xs font-medium text-amber-100 underline"
+                            className="inline-flex text-xs font-medium text-amber-800 underline"
                           >
                             Ver evidência anterior
                           </a>
                         )}
-                        <div className="flex flex-wrap gap-4 text-xs sm:text-sm">
+                        <div className="mt-1 flex flex-wrap gap-3 text-xs sm:text-sm">
                           <label className="inline-flex items-center gap-2">
                             <input
                               type="radio"
@@ -689,7 +627,7 @@ export default function ChecklistByTagPage() {
                               value="resolved"
                               checked={recurrenceStatus === "resolved"}
                               onChange={() => setRecurrenceDecision(question.id, "resolved")}
-                              className="accent-emerald-500"
+                              className="accent-emerald-600"
                             />
                             <span>Resolvido</span>
                           </label>
@@ -700,7 +638,7 @@ export default function ChecklistByTagPage() {
                               value="still_nc"
                               checked={recurrenceStatus === "still_nc"}
                               onChange={() => setRecurrenceDecision(question.id, "still_nc")}
-                              className="accent-amber-500"
+                              className="accent-amber-600"
                             />
                             <span>Permanece não conforme</span>
                           </label>
@@ -708,71 +646,150 @@ export default function ChecklistByTagPage() {
                       </div>
                     )}
 
-                    <div className="flex flex-wrap gap-3 text-sm">
-                      {(["ok", "nc", "na"] as const).map((value) => (
-                        <label key={value} className="inline-flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name={`q-${question.id}`}
-                            value={value}
-                            checked={answers[question.id]?.response === value}
-                            onChange={() => setResponse(question.id, value)}
-                            className="accent-blue-500"
-                          />
-                          <span className="uppercase">{value}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <div className="mt-3 flex flex-col gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">Resultado:</span>
+                        <div className="flex gap-2">
+                          <ChoiceBtn
+                            tone="ok"
+                            active={answers[question.id]?.response === "ok"}
+                            onClick={() => setResponse(question.id, "ok")}
+                          >
+                            C
+                          </ChoiceBtn>
+                          <ChoiceBtn
+                            tone="nc"
+                            active={answers[question.id]?.response === "nc"}
+                            onClick={() => setResponse(question.id, "nc")}
+                          >
+                            NC
+                          </ChoiceBtn>
+                          <ChoiceBtn
+                            tone="na"
+                            active={answers[question.id]?.response === "na"}
+                            onClick={() => setResponse(question.id, "na")}
+                          >
+                            N/A
+                          </ChoiceBtn>
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-sm text-gray-300">Observações</label>
-                      <textarea
-                        value={answers[question.id]?.observation ?? ""}
-                        onChange={(event) => setObservation(question.id, event.target.value)}
-                        rows={3}
-                        placeholder="Registre detalhes importantes, evidências ou observações adicionais"
-                        className={[
-                          "mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white",
-                          "placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
-                        ].join(" ")}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs text-gray-400">
-                        Foto {question.requiresPhoto ? "(obrigatória para NC)" : "(opcional)"}
-                      </label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(event) => onPhotoChange(question.id, event.target.files?.[0] || null)}
-                        className={[
-                          "mt-1 block w-full text-xs",
-                          "file:mr-3 file:rounded-md file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white",
-                          "hover:file:bg-gray-600",
-                        ].join(" ")}
-                      />
+                      <div className="space-y-1">
+                        <label className="block text-sm text-gray-600">Observações</label>
+                        <textarea
+                          value={answers[question.id]?.observation ?? ""}
+                          onChange={(e) => setObservation(question.id, e.target.value)}
+                          rows={3}
+                          placeholder="Registre detalhes importantes, evidências ou observações adicionais"
+                          className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                      </div>
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">Nenhum template selecionado ou vinculado.</p>
+            <p className="text-sm text-gray-600">Nenhum template selecionado ou vinculado.</p>
           )}
         </section>
 
+        {/* NCs Extras */}
+        <section className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Adicionar não conformidades que não estão nas perguntas</h2>
+            <button
+              type="button"
+              onClick={() => setExtraNcs((prev) => [...prev, { title: "" }])}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
+            >
+              + Adicionar
+            </button>
+          </div>
+
+          {extraNcs.length === 0 && (
+            <p className="text-sm text-gray-600">Se necessário, registre aqui qualquer NC adicional observada.</p>
+          )}
+
+          <div className="space-y-3">
+            {extraNcs.map((item, idx) => (
+              <div key={idx} className="rounded-lg border border-gray-200 p-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-6">
+                  <div className="sm:col-span-3">
+                    <label className="text-sm text-gray-600">Título da NC *</label>
+                    <input
+                      value={item.title}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExtraNcs((prev) => prev.map((x, i) => (i === idx ? { ...x, title: v } : x)));
+                      }}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Ex.: Vazamento em mangueira hidráulica"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-sm text-gray-600">Severidade</label>
+                    <select
+                      value={item.severity || ""}
+                      onChange={(e) => {
+                        const v = e.target.value as ExtraNc["severity"];
+                        setExtraNcs((prev) => prev.map((x, i) => (i === idx ? { ...x, severity: (v || undefined) } : x)));
+                      }}
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">—</option>
+                      <option value="baixa">Baixa</option>
+                      <option value="media">Média</option>
+                      <option value="alta">Alta</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-6">
+                    <label className="text-sm text-gray-600">Descrição</label>
+                    <textarea
+                      value={item.description || ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setExtraNcs((prev) => prev.map((x, i) => (i === idx ? { ...x, description: v } : x)));
+                      }}
+                      rows={2}
+                      placeholder="Detalhe a situação observada"
+                      className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setExtraNcs((prev) => prev.filter((_, i) => i !== idx))}
+                    className="text-sm font-medium text-red-600 hover:underline"
+                  >
+                    Remover
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Ações */}
         <div className="flex justify-end">
           <button
             onClick={handleSubmit}
-            className="px-5 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-5 py-2 font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={submitDisabled}
           >
-            Enviar Checklist
+            {isSubmitting ? <Spinner /> : "Enviar Checklist"}
           </button>
         </div>
       </div>
+
+      {notification.show && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={hideNotification}
+        />
+      )}
     </div>
   );
 }
