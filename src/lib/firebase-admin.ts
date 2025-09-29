@@ -66,7 +66,6 @@ function resolveCredential() {
     };
     return cert(serviceAccount);
   }
-
   try {
     return applicationDefault();
   } catch (error) {
