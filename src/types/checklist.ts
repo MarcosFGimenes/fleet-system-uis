@@ -53,6 +53,14 @@ export interface ChecklistAnswer {
 
 export type NonConformityStatus = "open" | "in_progress" | "resolved";
 
+export interface ChecklistExtraNonConformity {
+  title: string;
+  description?: string;
+  severity?: "baixa" | "media" | "alta";
+  safetyRisk?: boolean;
+  impactAvailability?: boolean;
+}
+
 export interface ChecklistNonConformityTreatment {
   questionId: string;
   summary?: string;
@@ -75,4 +83,5 @@ export interface ChecklistResponse {
   horimetro?: number;
   answers: ChecklistAnswer[];
   nonConformityTreatments?: ChecklistNonConformityTreatment[];
+  extraNonConformities?: ChecklistExtraNonConformity[];
 }
