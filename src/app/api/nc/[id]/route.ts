@@ -115,16 +115,17 @@ async function fetchDoc(id: string) {
 }
 
 type RouteContext = {
-  params?: Promise<Record<string, string | string[] | undefined>>;
+  params: Promise<{ id: string }>;
 };
 
 async function resolveId(context: RouteContext): Promise<string | null> {
-  const params = (await context.params) ?? {};
+  const params = await context.params;
   const value = params.id;
-  if (Array.isArray(value)) {
-    return value[0] ?? null;
+  if (typeof value !== "string") {
+    return null;
   }
-  return typeof value === "string" && value ? value : null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
 }
 
 export async function GET(_request: NextRequest, context: RouteContext) {

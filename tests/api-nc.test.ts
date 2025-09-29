@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NonConformity } from "@/types/nonconformity";
-import { matchesFilters } from "@/app/api/nc/route";
+import { matchesFilters } from "@/app/api/nc/filters";
 
 const sampleNc = (overrides: Partial<NonConformity>): NonConformity => ({
   id: crypto.randomUUID(),
