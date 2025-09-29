@@ -1,9 +1,22 @@
-import {
-  DocumentSnapshot,
-  QueryDocumentSnapshot,
-  Timestamp,
+import type {
+  DocumentSnapshot as ClientDocumentSnapshot,
+  QueryDocumentSnapshot as ClientQueryDocumentSnapshot,
+  Timestamp as ClientTimestamp,
 } from "firebase/firestore";
+import type {
+  DocumentSnapshot as AdminDocumentSnapshot,
+  QueryDocumentSnapshot as AdminQueryDocumentSnapshot,
+  Timestamp as AdminTimestamp,
+} from "firebase-admin/firestore";
 import type { NcAction, NonConformity, Severity, TelemetryRef } from "@/types/nonconformity";
+
+type AnyDocumentSnapshot =
+  | ClientQueryDocumentSnapshot
+  | ClientDocumentSnapshot
+  | AdminQueryDocumentSnapshot
+  | AdminDocumentSnapshot;
+
+type AnyTimestamp = ClientTimestamp | AdminTimestamp;
 
 const SEVERITY_RANK: Record<Severity, number> = {
   baixa: 1,
@@ -11,12 +24,21 @@ const SEVERITY_RANK: Record<Severity, number> = {
   alta: 3,
 };
 
+function isTimestamp(value: unknown): value is AnyTimestamp {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: () => Date }).toDate === "function"
+  );
+}
+
 function ensureIsoDate(value?: unknown): string {
   if (typeof value === "string") {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
-  if (value instanceof Timestamp) {
+  if (isTimestamp(value)) {
     return value.toDate().toISOString();
   }
   return new Date().toISOString();
@@ -77,9 +99,7 @@ function getSeverityRank(severity?: Severity, fallback?: number): number {
   return fallback ?? SEVERITY_RANK.media;
 }
 
-export function mapNonConformityDoc(
-  doc: QueryDocumentSnapshot | DocumentSnapshot,
-): NonConformity {
+export function mapNonConformityDoc(doc: AnyDocumentSnapshot): NonConformity {
   const data = doc.data() as Record<string, unknown> | undefined;
   const severity = (data?.severity as Severity | undefined) ?? undefined;
   const actionsRaw = Array.isArray(data?.actions) ? (data?.actions as unknown[]) : [];
