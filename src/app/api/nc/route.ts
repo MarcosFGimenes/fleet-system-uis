@@ -8,14 +8,6 @@ export const dynamic = "force-dynamic";
 
 const MAX_FETCH = 500;
 
-function normalizeText(value: string | undefined | null): string {
-  if (!value) return "";
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
 function normalizeParam(value: string | null): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
