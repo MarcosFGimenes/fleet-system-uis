@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import KpiTile from "@/components/ui/KpiTile";
@@ -61,6 +61,31 @@ const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
 const shortDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
 });
+
+async function buildErrorMessage(response: Response): Promise<string> {
+  let parsed = "";
+
+  try {
+    const jsonClone = response.clone();
+    const jsonBody = await jsonClone.json();
+    if (typeof jsonBody === "string") {
+      parsed = jsonBody;
+    } else {
+      parsed = JSON.stringify(jsonBody);
+    }
+  } catch {
+    try {
+      const textClone = response.clone();
+      parsed = await textClone.text();
+    } catch {
+      parsed = "";
+    }
+  }
+
+  const normalized = parsed ? parsed.replace(/\s+/g, " ").trim() : "sem detalhes";
+  const snippet = normalized.slice(0, 280);
+  return `Falha ao carregar não conformidades (status ${response.status}) — ${snippet}`;
+}
 
 type Filters = {
   status: string;
@@ -154,6 +179,14 @@ export default function NonConformitiesOverviewPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [massBusy, setMassBusy] = useState(false);
   const [massMessage, setMassMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const fetchControllerRef = useRef<AbortController | null>(null);
+
+  const handleRetry = useCallback(() => {
+    fetchControllerRef.current?.abort();
+    setError(null);
+    setLoading(true);
+    setRefreshToken((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -191,6 +224,11 @@ export default function NonConformitiesOverviewPage() {
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    fetchControllerRef.current = controller;
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 15000);
+
     setLoading(true);
     setError(null);
 
@@ -204,27 +242,54 @@ export default function NonConformitiesOverviewPage() {
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
 
-    fetch(`/api/nc?${params.toString()}`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error("Falha ao carregar não conformidades");
-        const payload = await res.json();
+    const url = `/api/nc?${params.toString()}`;
+
+    (async () => {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          const message = await buildErrorMessage(response);
+          console.error(message);
+          if (!cancelled) {
+            setRecords([]);
+            setTotal(0);
+            setSelectedIds([]);
+            setError(message);
+          }
+          return;
+        }
+
+        const payload = await response.json();
         if (cancelled) return;
         setRecords(payload.data as NonConformity[]);
         setTotal(payload.total as number);
-        setSelectedIds((prev) => prev.filter((id) => (payload.data as NonConformity[]).some((item) => item.id === id)));
-      })
-      .catch((err) => {
-        if (cancelled || err.name === "AbortError") return;
+        setSelectedIds((prev) =>
+          prev.filter((id) => (payload.data as NonConformity[]).some((item) => item.id === id)),
+        );
+      } catch (err) {
+        if (cancelled) return;
+        if ((err as Error)?.name === "AbortError") return;
         console.error(err);
-        setError("Não foi possível carregar as não conformidades.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        setError(
+          err instanceof Error && err.message
+            ? `Falha ao carregar não conformidades — ${err.message}`
+            : "Falha ao carregar não conformidades.",
+        );
+      } finally {
+        clearTimeout(timeoutId);
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
       controller.abort();
+      clearTimeout(timeoutId);
+      if (fetchControllerRef.current === controller) {
+        fetchControllerRef.current = null;
+      }
     };
   }, [filters, page, pageSize, refreshToken]);
 
@@ -641,7 +706,22 @@ export default function NonConformitiesOverviewPage() {
           </div>
         </div>
 
-        {error && <Alert variant="error" title="Erro" description={error} />}
+        {error && (
+          <Alert
+            variant="error"
+            title="Erro"
+            description={<span className="block whitespace-pre-wrap">{error}</span>}
+            action={
+              <button
+                type="button"
+                onClick={handleRetry}
+                className="rounded-md border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"
+              >
+                Tentar novamente
+              </button>
+            }
+          />
+        )}
         {massMessage && <Alert variant={massMessage.type === "success" ? "success" : "error"} description={massMessage.text} />}
 
         <DataTable
