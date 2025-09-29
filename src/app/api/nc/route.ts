@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
 import type { Severity } from "@/types/nonconformity";
 import { matchesFilters } from "./filters";
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
     const dateTo = normalizeParam(params.get("dateTo"));
     const queryText = normalizeParam(params.get("q"));
 
-    const snapshot = await adminDb
+    const snapshot = await getAdminDb()
       .collection("nonConformities")
       .orderBy("createdAt", "desc")
       .limit(MAX_FETCH)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 import {
   defaultDueAt,
   mapNonConformityDoc,
@@ -95,7 +95,7 @@ function diffChanged(before: unknown, after: unknown): boolean {
 }
 
 async function fetchDoc(id: string) {
-  const ref = adminDb.collection("nonConformities").doc(id);
+  const ref = getAdminDb().collection("nonConformities").doc(id);
   const snapshot = await ref.get();
   if (!snapshot.exists) {
     return null;

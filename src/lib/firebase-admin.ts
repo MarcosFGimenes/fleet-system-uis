@@ -74,6 +74,11 @@ function resolveCredential() {
   }
 }
 
-const adminApp = getApps().length ? getApp() : initializeApp({ credential: resolveCredential() });
+let cachedDb: import("firebase-admin/firestore").Firestore | undefined;
 
-export const adminDb = getFirestore(adminApp);
+export function getAdminDb() {
+  if (cachedDb) return cachedDb;
+  const app = getApps().length ? getApp() : initializeApp({ credential: resolveCredential() });
+  cachedDb = getFirestore(app);
+  return cachedDb;
+}
