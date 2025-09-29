@@ -4,6 +4,7 @@ import {
   type WhereFilterOp,
   type OrderByDirection,
 } from "firebase-admin/firestore";
+
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import { GET } from "@/app/api/nc/route";
@@ -44,6 +45,7 @@ class FakeResponseQuery {
   ) {}
 
   where(field: string, op: WhereFilterOp, value: unknown) {
+
     if (op !== "==" && op !== ">=" && op !== "<=") {
       throw new Error(`Unsupported operator ${op}`);
     }
@@ -51,6 +53,7 @@ class FakeResponseQuery {
   }
 
   orderBy(field: string, direction: OrderByDirection = "desc") {
+
     return new FakeResponseQuery(this.docs, this.filters, field, direction, this.limitValue);
   }
 
@@ -176,6 +179,7 @@ const baseResponse = {
 
 beforeEach(() => {
   FakeResponseQuery.triggerMissingIndexOnce = false;
+
   currentDb = createDb([baseResponse], new Map([["tpl-1", baseTemplate]]));
 });
 

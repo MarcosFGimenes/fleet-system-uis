@@ -120,6 +120,7 @@ function sanitizeString(value: unknown): string | null {
   return trimmed || null;
 }
 
+
 function normalizePhotoUrls(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -309,6 +310,7 @@ export async function GET(request: NextRequest) {
     }
 
     if ((from || to) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
+
       // Some legacy responses may only have string-based createdAt values.
       // Fetch an extra window without timestamp filters and rely on in-memory filtering.
       const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
