@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Firestore indexes
+
+The `/api/nc` route issues filtered queries on `checklistResponses` combining equality filters with a `createdAtTs` sort. Ensure the following composite indexes exist before deploying:
+
+- `checklistResponses`: `machineId` (ASC) + `createdAtTs` (DESC)
+- `checklistResponses`: `templateId` (ASC) + `createdAtTs` (DESC)
+- `checklistResponses`: `operatorMatricula` (ASC) + `createdAtTs` (DESC)
+
+These definitions are included in `firestore.indexes.json` for convenience.
