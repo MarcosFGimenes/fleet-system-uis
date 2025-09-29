@@ -156,30 +156,34 @@ export default function AssetReliabilityPage() {
     };
   }, [records]);
 
-  const resolutionScatter = useMemo<ResolutionPoint[]>(() =>
-    records
-      \.map((record) => {
-        const completed = record.actions?.find((action) => action.type === "corretiva" && action.completedAt);
-        return {
-          severity: severityLabel[record.severity ?? "media"],
-          severityWeight: severityWeight[record.severity ?? "media"],
-          resolution: hoursBetween(record.createdAt, completed?.completedAt) ?? 0,
-          title: record.title,
-        };
-      })
-            .filter((point): point is ResolutionPoint => point.resolution > 0),
-  [records]);
+  const resolutionScatter = useMemo<ResolutionPoint[]>(
+    () =>
+      records
+        .map((record) => {
+          const completed = record.actions?.find((action) => action.type === "corretiva" && action.completedAt);
+          return {
+            severity: severityLabel[record.severity ?? "media"],
+            severityWeight: severityWeight[record.severity ?? "media"],
+            resolution: hoursBetween(record.createdAt, completed?.completedAt) ?? 0,
+            title: record.title,
+          };
+        })
+        .filter((point): point is ResolutionPoint => point.resolution > 0),
+    [records],
+  );
 
-  const idleScatter = useMemo<IdlePoint[]>(() =>
-    records
-      .filter((record) => typeof record.telemetryRef?.idleTimeH === "number")
-            .map((record) => ({
-        idle: record.telemetryRef?.idleTimeH ?? 0,
-        severityWeight: severityWeight[record.severity ?? "media"],
-        severity: severityLabel[record.severity ?? "media"],
-        title: record.title,
-      })),
-  [records]);
+  const idleScatter = useMemo<IdlePoint[]>(
+    () =>
+      records
+        .filter((record) => typeof record.telemetryRef?.idleTimeH === "number")
+        .map((record) => ({
+          idle: record.telemetryRef?.idleTimeH ?? 0,
+          severityWeight: severityWeight[record.severity ?? "media"],
+          severity: severityLabel[record.severity ?? "media"],
+          title: record.title,
+        })),
+    [records],
+  );
 
   const timelineData = useMemo(() =>
     records
