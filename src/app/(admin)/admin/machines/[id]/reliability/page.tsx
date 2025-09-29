@@ -213,7 +213,7 @@ export default function AssetReliabilityPage() {
   }
 
   if (!machine) {
-    return <Alert variant="warn" description="Ativo não encontrado ou sem dados." />;
+    return <Alert variant="warning" description="Ativo não encontrado ou sem dados." />;
   }
 
   return (

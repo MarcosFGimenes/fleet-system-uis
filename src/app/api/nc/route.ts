@@ -2,19 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
-import type { NonConformity, Severity } from "@/types/nonconformity";
+import type { Severity } from "@/types/nonconformity";
+import { matchesFilters } from "./filters";
 
 export const dynamic = "force-dynamic";
 
 const MAX_FETCH = 500;
-
-function normalizeText(value: string | undefined | null): string {
-  if (!value) return "";
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
 
 function normalizeParam(value: string | null): string | undefined {
   const trimmed = value?.trim();
@@ -27,66 +20,6 @@ function parseListParam(value: string | null): string[] {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-}
-
-export function matchesFilters(
-  record: NonConformity,
-  filters: {
-    statuses: string[];
-    severities: string[];
-    assetId?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    query?: string;
-  },
-): boolean {
-  if (filters.statuses.length && !filters.statuses.includes(record.status)) {
-    return false;
-  }
-
-  if (filters.severities.length && (!record.severity || !filters.severities.includes(record.severity))) {
-    return false;
-  }
-
-  if (filters.assetId) {
-    if (record.linkedAsset.id !== filters.assetId && record.linkedAsset.tag !== filters.assetId) {
-      return false;
-    }
-  }
-
-  if (filters.dateFrom) {
-    const createdAt = new Date(record.createdAt).getTime();
-    if (Number.isNaN(createdAt) || createdAt < new Date(filters.dateFrom).getTime()) {
-      return false;
-    }
-  }
-
-  if (filters.dateTo) {
-    const createdAt = new Date(record.createdAt).getTime();
-    if (Number.isNaN(createdAt) || createdAt > new Date(filters.dateTo).getTime()) {
-      return false;
-    }
-  }
-
-  if (filters.query) {
-    const target = filters.query.toLowerCase();
-    const haystack = [
-      record.title,
-      record.description,
-      record.linkedAsset.tag,
-      record.linkedAsset.modelo,
-      record.createdBy.matricula,
-      record.rootCause,
-    ]
-      .map((value) => value?.toLowerCase?.() ?? "")
-      .join(" ");
-
-    if (!haystack.includes(target)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 export async function GET(request: NextRequest) {

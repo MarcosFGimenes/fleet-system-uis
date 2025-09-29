@@ -114,9 +114,28 @@ async function fetchDoc(id: string) {
   return { ref, snapshot } as const;
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+type RouteContext = {
+  params: Promise<{ id: string }>;
+};
+
+async function resolveId(context: RouteContext): Promise<string | null> {
+  const params = await context.params;
+  const value = params.id;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+export async function GET(_request: NextRequest, context: RouteContext) {
+  const id = await resolveId(context);
+  if (!id) {
+    return NextResponse.json({ error: "Parâmetro id inválido" }, { status: 400 });
+  }
+
   try {
-    const recordRef = await fetchDoc(params.id);
+    const recordRef = await fetchDoc(id);
     if (!recordRef) {
       return NextResponse.json({ error: "NC não encontrada" }, { status: 404 });
     }
@@ -132,14 +151,19 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     return NextResponse.json({ data, audits });
   } catch (error) {
-    console.error(`GET /api/nc/${params.id} failed`, error);
+    console.error(`GET /api/nc/${id} failed`, error);
     return NextResponse.json({ error: "Falha ao carregar a NC" }, { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const id = await resolveId(context);
+  if (!id) {
+    return NextResponse.json({ error: "Parâmetro id inválido" }, { status: 400 });
+  }
+
   try {
-    const recordRef = await fetchDoc(params.id);
+    const recordRef = await fetchDoc(id);
     if (!recordRef) {
       return NextResponse.json({ error: "NC não encontrada" }, { status: 404 });
     }
@@ -248,7 +272,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     return NextResponse.json({ data: updated });
   } catch (error) {
-    console.error(`PATCH /api/nc/${params.id} failed`, error);
+    console.error(`PATCH /api/nc/${id} failed`, error);
     return NextResponse.json({ error: "Falha ao atualizar a NC" }, { status: 500 });
   }
 }
