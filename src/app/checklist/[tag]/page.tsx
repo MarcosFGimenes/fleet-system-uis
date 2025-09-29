@@ -58,6 +58,20 @@ type ExtraNc = {
   severity?: "baixa" | "media" | "alta";
 };
 
+type ChecklistResponsePayload = {
+  machineId: string;
+  userId: string;
+  operatorMatricula: string;
+  operatorNome: string | null;
+  templateId: string;
+  createdAt: string;
+  createdAtTs: ReturnType<typeof serverTimestamp>;
+  answers: ChecklistAnswer[];
+  km?: number;
+  horimetro?: number;
+  extraNonConformities?: ExtraNc[];
+};
+
 /* ============================
    Ícones inline (SVG)
 ============================ */
@@ -432,7 +446,7 @@ export default function ChecklistByTagPage() {
       const matriculaValue = matricula.trim();
       const nomeValue = nomeResolved ? nomeResolved.trim() : "";
 
-      const payload: Record<string, unknown> = {
+      const payload: ChecklistResponsePayload = {
         machineId: machine.id,
         userId,
         operatorMatricula: matriculaValue,
@@ -454,13 +468,22 @@ export default function ChecklistByTagPage() {
 
       // Anexa NCs extras (se houver título preenchido)
       const extras = extraNcs
-        .map((e) => ({
-          title: e.title?.trim(),
-          description: e.description?.trim() || undefined,
-          severity: e.severity || undefined,
-        }))
-        .filter((e) => Boolean(e.title));
-      if (extras.length) (payload as any).extraNonConformities = extras;
+        .map((extra) => {
+          const title = extra.title.trim();
+          if (!title) return null;
+
+          const normalized: ExtraNc = { title };
+
+          const description = extra.description?.trim();
+          if (description) normalized.description = description;
+
+          if (extra.severity) normalized.severity = extra.severity;
+
+          return normalized;
+        })
+        .filter((extra): extra is ExtraNc => extra !== null);
+
+      if (extras.length) payload.extraNonConformities = extras;
 
       await addDoc(responsesCol, payload);
 
