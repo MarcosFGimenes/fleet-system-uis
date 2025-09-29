@@ -1,6 +1,11 @@
 export type Severity = "baixa" | "media" | "alta";
 
-export type NcStatus = "aberta" | "em_execucao" | "aguardando_peca" | "bloqueada" | "resolvida";
+export type NcStatus =
+  | "aberta"
+  | "em_execucao"
+  | "aguardando_peca"
+  | "bloqueada"
+  | "resolvida";
 
 export type TelemetryRef = {
   hours?: number;
@@ -33,7 +38,7 @@ export type NonConformity = {
   dueAt?: string;
   createdAt: string;
   createdBy: { id: string; matricula: string; nome?: string };
-  linkedAsset: { id: string; tag: string; modelo?: string; tipo?: string };
+  linkedAsset: { id: string; tag: string; modelo?: string; tipo?: string; setor?: string };
   linkedTemplateId?: string;
   source: "checklist_question" | "checklist_extra";
   originChecklistResponseId: string;
@@ -44,4 +49,5 @@ export type NonConformity = {
   telemetryRef?: TelemetryRef;
   yearMonth: string;
   severityRank: number;
+  systemCategory?: string;
 };

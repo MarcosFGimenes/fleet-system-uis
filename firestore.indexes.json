@@ -1,0 +1,63 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "nonConformities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "severityRank", "order": "DESCENDING" },
+        { "fieldPath": "yearMonth", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedAsset.id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkedAsset.id", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "nonConformities",
+      "fieldPath": "status",
+      "order": "ASCENDING"
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "fieldPath": "severityRank",
+      "order": "DESCENDING"
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "fieldPath": "yearMonth",
+      "order": "ASCENDING"
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "fieldPath": "linkedAsset.id",
+      "order": "ASCENDING"
+    },
+    {
+      "collectionGroup": "nonConformities",
+      "fieldPath": "createdBy.matricula",
+      "order": "ASCENDING"
+    }
+  ]
+}

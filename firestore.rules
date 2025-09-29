@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function hasRole(role) {
+      return request.auth != null && (
+        request.auth.token.role == role ||
+        (request.auth.token.roles != null && request.auth.token.roles[role] == true) ||
+        request.auth.token[role] == true
+      );
+    }
+
+    function isMaintainer() {
+      return hasRole("admin") || hasRole("mechanic") || hasRole("mecanico");
+    }
+
+    function isOperator() {
+      return hasRole("operator") || hasRole("operador");
+    }
+
+    match /nonConformities/{ncId} {
+      allow read: if isMaintainer();
+      allow create: if isMaintainer();
+      allow update: if isMaintainer();
+      allow delete: if false;
+    }
+
+    match /nonConformities/{ncId}/audits/{auditId} {
+      allow read: if isMaintainer();
+      allow create: if isMaintainer();
+      allow update, delete: if false;
+    }
+
+    match /checklistResponses/{responseId} {
+      allow read: if isMaintainer() || (isOperator() && request.auth != null && resource.data.createdBy != null && resource.data.createdBy.id == request.auth.uid);
+      allow create: if request.auth != null;
+      allow update: if isMaintainer();
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
