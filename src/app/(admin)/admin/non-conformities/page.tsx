@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReadonlyURLSearchParams } from "next/navigation";
 import Card from "@/components/ui/Card";
@@ -225,7 +225,7 @@ async function patchNc(id: string, body: Record<string, unknown>) {
   }
 }
 
-export default function NonConformitiesOverviewPage() {
+function NonConformitiesOverviewContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -571,21 +571,30 @@ export default function NonConformitiesOverviewPage() {
     [fetchKpis, selectedRecords],
   );
 
-  const applyMassStatus = (status: NcStatus) =>
-    executeMassUpdate(async (record) => {
-      await patchNc(record.id, { status });
-    });
+  const applyMassStatus = useCallback(
+    (status: NcStatus) =>
+      executeMassUpdate(async (record) => {
+        await patchNc(record.id, { status });
+      }),
+    [executeMassUpdate],
+  );
 
-  const applyMassDueAt = (dueAt: string) =>
-    executeMassUpdate(async (record) => {
-      await patchNc(record.id, { dueAt });
-    });
+  const applyMassDueAt = useCallback(
+    (dueAt: string) =>
+      executeMassUpdate(async (record) => {
+        await patchNc(record.id, { dueAt });
+      }),
+    [executeMassUpdate],
+  );
 
-  const applyMassOwner = (owner: string) =>
-    executeMassUpdate(async (record) => {
-      const actions = buildOwnerAction(record, owner);
-      await patchNc(record.id, { actions });
-    });
+  const applyMassOwner = useCallback(
+    (owner: string) =>
+      executeMassUpdate(async (record) => {
+        const actions = buildOwnerAction(record, owner);
+        await patchNc(record.id, { actions });
+      }),
+    [executeMassUpdate],
+  );
 
   const handlePageChange = useCallback((nextPage: number) => {
     setPage(Math.max(1, nextPage));
@@ -1021,5 +1030,13 @@ export default function NonConformitiesOverviewPage() {
         />
       </Card>
     </div>
+  );
+}
+
+export default function NonConformitiesOverviewPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-[var(--hint)]">Carregando...</div>}>
+      <NonConformitiesOverviewContent />
+    </Suspense>
   );
 }
