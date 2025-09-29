@@ -1,12 +1,12 @@
-﻿"use client";
+"use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Card from "@/components/ui/Card";
 import KpiTile from "@/components/ui/KpiTile";
 import DataTable from "@/components/ui/DataTable";
 import Alert from "@/components/ui/Alert";
-import type { NcAction, NonConformity, NcStatus } from "@/types/nonconformity";
+import type { NcAction, NcStatus, NonConformity } from "@/types/nonconformity";
 import {
   Area,
   AreaChart,
@@ -23,77 +23,50 @@ import {
 const STORAGE_KEY = "admin-nc-filters";
 const MAX_PAGE_SIZE = 100;
 
-const statusOptions: { value: string; label: string }[] = [
+const STATUS_OPTIONS: { value: "" | NcStatus; label: string }[] = [
   { value: "", label: "Todos" },
   { value: "aberta", label: "Abertas" },
-  { value: "em_execucao", label: "Em execucao" },
-  { value: "aguardando_peca", label: "Aguardando peca" },
+  { value: "em_execucao", label: "Em execução" },
+  { value: "aguardando_peca", label: "Aguardando peça" },
   { value: "bloqueada", label: "Bloqueadas" },
   { value: "resolvida", label: "Resolvidas" },
 ];
 
-const severityOptions: { value: string; label: string }[] = [
+const SEVERITY_OPTIONS = [
   { value: "", label: "Todas severidades" },
   { value: "alta", label: "Alta" },
-  { value: "media", label: "Media" },
+  { value: "media", label: "Média" },
   { value: "baixa", label: "Baixa" },
 ];
 
-const severityStyles: Record<string, string> = {
+const SEVERITY_STYLES: Record<string, string> = {
   alta: "bg-red-100 text-red-700 border border-red-200",
   media: "bg-amber-100 text-amber-700 border border-amber-200",
   baixa: "bg-emerald-100 text-emerald-700 border border-emerald-200",
 };
 
-const statusLabel: Record<NcStatus, string> = {
+const STATUS_LABEL: Record<NcStatus, string> = {
   aberta: "Aberta",
-  em_execucao: "Em execucao",
-  aguardando_peca: "Aguardando peca",
+  em_execucao: "Em execução",
+  aguardando_peca: "Aguardando peça",
   bloqueada: "Bloqueada",
   resolvida: "Resolvida",
 };
 
-const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+const LONG_DATE_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
   timeStyle: "short",
 });
 
-const shortDateFormatter = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-});
-
-async function buildErrorMessage(response: Response): Promise<string> {
-  let parsed = "";
-
-  try {
-    const jsonClone = response.clone();
-    const jsonBody = await jsonClone.json();
-    if (typeof jsonBody === "string") {
-      parsed = jsonBody;
-    } else {
-      parsed = JSON.stringify(jsonBody);
-    }
-  } catch {
-    try {
-      const textClone = response.clone();
-      parsed = await textClone.text();
-    } catch {
-      parsed = "";
-    }
-  }
-
-  const normalized = parsed ? parsed.replace(/\s+/g, " ").trim() : "sem detalhes";
-  const snippet = normalized.slice(0, 280);
-  return `Falha ao carregar não conformidades (status ${response.status}) — ${snippet}`;
-}
+const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 
 type Filters = {
-  status: string;
-  severity: string;
+  status: "" | NcStatus;
+  severity: "" | "alta" | "media" | "baixa";
   assetId: string;
   dateFrom?: string;
   dateTo?: string;
-  q?: string;
+  q: string;
 };
 
 type KpiResponse = {
@@ -121,36 +94,58 @@ const DEFAULT_FILTERS: Filters = {
   q: "",
 };
 
+function buildOwnerAction(record: NonConformity, ownerName: string): NcAction[] {
+  const normalizedOwner = ownerName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 32) || "responsavel";
+
+  const clonedActions = [...(record.actions ?? [])];
+  const corrective = clonedActions.find((action) => action.type === "corretiva");
+
+  if (corrective) {
+    corrective.owner = { id: normalizedOwner, nome: ownerName };
+    corrective.startedAt = corrective.startedAt ?? new Date().toISOString();
+    return clonedActions;
+  }
+
+  clonedActions.unshift({
+    id: crypto.randomUUID(),
+    type: "corretiva",
+    description: "Responsável definido via painel administrador",
+    owner: { id: normalizedOwner, nome: ownerName },
+    startedAt: new Date().toISOString(),
+  });
+
+  return clonedActions;
+}
+
+async function buildErrorMessage(response: Response): Promise<string> {
+  try {
+    const data = await response.clone().json();
+    const payload = typeof data === "string" ? data : JSON.stringify(data);
+    return `Falha ao carregar não conformidades (status ${response.status}) — ${payload.slice(0, 280)}`;
+  } catch {
+    try {
+      const text = await response.clone().text();
+      const snippet = text.replace(/\s+/g, " ").trim().slice(0, 280);
+      return `Falha ao carregar não conformidades (status ${response.status}) — ${snippet || "sem detalhes"}`;
+    } catch {
+      return `Falha ao carregar não conformidades (status ${response.status})`;
+    }
+  }
+}
+
 function isOverdue(record: NonConformity): boolean {
-  if (!record.dueAt || record.status === "resolvida") return false;
+  if (!record.dueAt || record.status === "resolvida") {
+    return false;
+  }
   return new Date(record.dueAt).getTime() < Date.now();
 }
 
 function getCorrectiveOwner(record: NonConformity): string | undefined {
-  const owner = record.actions?.find((action) => action.type === "corretiva" && action.owner)?.owner;
-  return owner?.nome ?? owner?.id;
-}
-
-function buildOwnerAction(record: NonConformity, ownerName: string): NcAction[] {
-  const actions = [...(record.actions ?? [])];
-  const normalizedOwner = {
-    id: ownerName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32) || "responsavel",
-    nome: ownerName,
-  };
-  const existing = actions.find((action) => action.type === "corretiva");
-  if (existing) {
-    existing.owner = normalizedOwner;
-    existing.startedAt = existing.startedAt ?? new Date().toISOString();
-    return actions;
-  }
-  actions.unshift({
-    id: crypto.randomUUID(),
-    type: "corretiva",
-    description: "Responsavel definido via painel administrador",
-    owner: normalizedOwner,
-    startedAt: new Date().toISOString(),
-  });
-  return actions;
+  const action = record.actions?.find((item) => item.type === "corretiva" && item.owner);
+  return action?.owner?.nome ?? action?.owner?.id;
 }
 
 async function patchNc(id: string, body: Record<string, unknown>) {
@@ -159,45 +154,44 @@ async function patchNc(id: string, body: Record<string, unknown>) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, actor: { id: "admin-ui", nome: "Painel Admin" } }),
   });
+
   if (!response.ok) {
     const message = await response.text();
     throw new Error(message || "Falha ao atualizar NC");
   }
 }
 
-export default function NonConformitiesOverviewPage() {
+export default function NonConformitiesOverviewPage(): JSX.Element {
   const router = useRouter();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [refreshToken, setRefreshToken] = useState(0);
   const [records, setRecords] = useState<NonConformity[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [kpis, setKpis] = useState<KpiResponse | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [refreshToken, setRefreshToken] = useState(0);
   const [massBusy, setMassBusy] = useState(false);
   const [massMessage, setMassMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const fetchControllerRef = useRef<AbortController | null>(null);
+  const [kpis, setKpis] = useState<KpiResponse | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const handleRetry = useCallback(() => {
-    fetchControllerRef.current?.abort();
-    setError(null);
-    setLoading(true);
-    setRefreshToken((prev) => prev + 1);
-  }, []);
+  const selectedRecords = useMemo(
+    () => records.filter((record) => selectedIds.includes(record.id)),
+    [records, selectedIds],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Partial<Filters>;
-        setFilters((prev) => ({ ...prev, ...parsed }));
-      } catch (parseError) {
-        console.warn("Não foi possível carregar filtros salvos", parseError);
-      }
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<Filters>;
+      setFilters((prev) => ({ ...prev, ...parsed }));
+    } catch (err) {
+      console.warn("Não foi possível restaurar filtros salvos", err);
     }
   }, []);
 
@@ -206,28 +200,27 @@ export default function NonConformitiesOverviewPage() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
   }, [filters]);
 
-  const loadKpis = useCallback(async () => {
+  const fetchKpis = useCallback(async () => {
     try {
       const response = await fetch("/api/kpi/nc");
-      if (!response.ok) throw new Error("Falha ao carregar KPIs");
-      const data = (await response.json()) as KpiResponse;
-      setKpis(data);
+      if (!response.ok) {
+        throw new Error(`Falha ao carregar KPIs (status ${response.status})`);
+      }
+      const payload = (await response.json()) as KpiResponse;
+      setKpis(payload);
     } catch (err) {
       console.error(err);
     }
   }, []);
 
   useEffect(() => {
-    loadKpis();
-  }, [loadKpis]);
+    fetchKpis();
+  }, [fetchKpis]);
 
   useEffect(() => {
-    let cancelled = false;
     const controller = new AbortController();
-    fetchControllerRef.current = controller;
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, 15000);
+    controllerRef.current?.abort();
+    controllerRef.current = controller;
 
     setLoading(true);
     setError(null);
@@ -244,91 +237,71 @@ export default function NonConformitiesOverviewPage() {
 
     const url = `/api/nc?${params.toString()}`;
 
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+
     (async () => {
       try {
         const response = await fetch(url, { signal: controller.signal });
         if (!response.ok) {
-          const message = await buildErrorMessage(response);
-          console.error(message);
-          if (!cancelled) {
-            setRecords([]);
-            setTotal(0);
-            setSelectedIds([]);
-            setError(message);
-          }
-          return;
+          throw new Error(await buildErrorMessage(response));
         }
 
         const payload = await response.json();
-        if (cancelled) return;
-        setRecords(payload.data as NonConformity[]);
-        setTotal(payload.total as number);
-        setSelectedIds((prev) =>
-          prev.filter((id) => (payload.data as NonConformity[]).some((item) => item.id === id)),
-        );
+        setRecords((payload.data as NonConformity[]) ?? []);
+        setTotal((payload.total as number) ?? 0);
+        setSelectedIds((prev) => prev.filter((id) => (payload.data as NonConformity[]).some((item) => item.id === id)));
       } catch (err) {
-        if (cancelled) return;
         if ((err as Error)?.name === "AbortError") return;
         console.error(err);
-        setError(
-          err instanceof Error && err.message
-            ? `Falha ao carregar não conformidades — ${err.message}`
-            : "Falha ao carregar não conformidades.",
-        );
+        setRecords([]);
+        setTotal(0);
+        setSelectedIds([]);
+        setError(err instanceof Error ? err.message : "Falha ao carregar não conformidades.");
       } finally {
-        clearTimeout(timeoutId);
-        if (!cancelled) {
-          setLoading(false);
-        }
+        window.clearTimeout(timeoutId);
+        setLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
       controller.abort();
-      clearTimeout(timeoutId);
-      if (fetchControllerRef.current === controller) {
-        fetchControllerRef.current = null;
-      }
+      window.clearTimeout(timeoutId);
     };
   }, [filters, page, pageSize, refreshToken]);
 
-  const selectedRecords = useMemo(
-    () => records.filter((record) => selectedIds.includes(record.id)),
-    [records, selectedIds],
+  const handleRetry = useCallback(() => {
+    controllerRef.current?.abort();
+    setError(null);
+    setLoading(true);
+    setRefreshToken((prev) => prev + 1);
+  }, []);
+
+  const executeMassUpdate = useCallback(
+    async (updater: (record: NonConformity) => Promise<void>) => {
+      if (!selectedRecords.length) {
+        setMassMessage({ type: "error", text: "Selecione ao menos uma NC." });
+        return;
+      }
+
+      setMassBusy(true);
+      setMassMessage(null);
+      try {
+        for (const record of selectedRecords) {
+          await updater(record);
+        }
+        setMassMessage({ type: "success", text: "Atualização aplicada com sucesso." });
+        setSelectedIds([]);
+        setRefreshToken((prev) => prev + 1);
+        fetchKpis();
+      } catch (error) {
+        console.error(error);
+        setMassMessage({ type: "error", text: "Falha ao aplicar a ação em massa." });
+      } finally {
+        setMassBusy(false);
+      }
+    },
+    [fetchKpis, selectedRecords],
   );
-
-  const handleSelectToggle = (id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      if (checked) {
-        return Array.from(new Set([...prev, id]));
-      }
-      return prev.filter((item) => item !== id);
-    });
-  };
-
-  const executeMassUpdate = async (updater: (record: NonConformity) => Promise<void>) => {
-    if (!selectedRecords.length) {
-      setMassMessage({ type: "error", text: "Selecione ao menos uma NC." });
-      return;
-    }
-    setMassBusy(true);
-    setMassMessage(null);
-    try {
-      for (const record of selectedRecords) {
-        await updater(record);
-      }
-      setMassMessage({ type: "success", text: "Atualizacao aplicada com sucesso." });
-      setSelectedIds([]);
-      setRefreshToken((prev) => prev + 1);
-      loadKpis();
-    } catch (error) {
-      console.error(error);
-      setMassMessage({ type: "error", text: "Falha ao aplicar a acao em massa." });
-    } finally {
-      setMassBusy(false);
-    }
-  };
 
   const applyMassStatus = (status: NcStatus) =>
     executeMassUpdate(async (record) => {
@@ -340,11 +313,20 @@ export default function NonConformitiesOverviewPage() {
       await patchNc(record.id, { dueAt });
     });
 
-  const applyMassOwner = (ownerName: string) =>
+  const applyMassOwner = (owner: string) =>
     executeMassUpdate(async (record) => {
-      const actions = buildOwnerAction(record, ownerName);
+      const actions = buildOwnerAction(record, owner);
       await patchNc(record.id, { actions });
     });
+
+  const handleSelectToggle = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      if (checked) {
+        return Array.from(new Set([...prev, id]));
+      }
+      return prev.filter((item) => item !== id);
+    });
+  };
 
   const filterControls = (
     <div className="flex w-full flex-col gap-3">
@@ -352,12 +334,12 @@ export default function NonConformitiesOverviewPage() {
         <select
           value={filters.status}
           onChange={(event) => {
-            setFilters((prev) => ({ ...prev, status: event.target.value }));
+            setFilters((prev) => ({ ...prev, status: event.target.value as Filters["status"] }));
             setPage(1);
           }}
           className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
         >
-          {statusOptions.map((option) => (
+          {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -366,12 +348,12 @@ export default function NonConformitiesOverviewPage() {
         <select
           value={filters.severity}
           onChange={(event) => {
-            setFilters((prev) => ({ ...prev, severity: event.target.value }));
+            setFilters((prev) => ({ ...prev, severity: event.target.value as Filters["severity"] }));
             setPage(1);
           }}
           className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
         >
-          {severityOptions.map((option) => (
+          {SEVERITY_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -410,20 +392,20 @@ export default function NonConformitiesOverviewPage() {
             setFilters((prev) => ({ ...prev, q: event.target.value }));
             setPage(1);
           }}
-          placeholder="Buscar por titulo, ativo ou causa"
+          placeholder="Buscar por título, ativo ou causa"
           className="w-48 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
         />
       </div>
       {selectedIds.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-          <span className="font-medium">Acoes em massa para {selectedIds.length} selecionadas:</span>
+          <span className="font-medium">Ações em massa para {selectedIds.length} selecionadas:</span>
           <button
             type="button"
             disabled={massBusy}
             onClick={() => applyMassStatus("em_execucao")}
             className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
           >
-            Marcar em execucao
+            Marcar em execução
           </button>
           <button
             type="button"
@@ -448,7 +430,7 @@ export default function NonConformitiesOverviewPage() {
             />
           </label>
           <label className="flex items-center gap-2">
-            <span>Responsavel:</span>
+            <span>Responsável:</span>
             <input
               type="text"
               disabled={massBusy}
@@ -487,7 +469,7 @@ export default function NonConformitiesOverviewPage() {
       label: "Status",
       render: (record: NonConformity) => (
         <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
-          {statusLabel[record.status] ?? record.status}
+          {STATUS_LABEL[record.status] ?? record.status}
         </span>
       ),
     },
@@ -498,7 +480,7 @@ export default function NonConformitiesOverviewPage() {
         <span
           className={[
             "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
-            severityStyles[record.severity ?? ""] ?? "bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]",
+            SEVERITY_STYLES[record.severity ?? ""] ?? "bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]",
           ].join(" ")}
         >
           {record.severity ? record.severity.toUpperCase() : "-"}
@@ -507,13 +489,11 @@ export default function NonConformitiesOverviewPage() {
     },
     {
       key: "title",
-      label: "Titulo",
+      label: "Título",
       render: (record: NonConformity) => (
         <div className="flex flex-col">
           <span className="font-medium text-gray-800">{record.title}</span>
-          {record.description && (
-            <span className="text-xs text-gray-500">{record.description}</span>
-          )}
+          {record.description && <span className="text-xs text-gray-500">{record.description}</span>}
         </div>
       ),
     },
@@ -523,9 +503,7 @@ export default function NonConformitiesOverviewPage() {
       render: (record: NonConformity) => (
         <div className="flex flex-col">
           <span className="text-sm font-medium text-gray-700">{record.linkedAsset.tag}</span>
-          {record.linkedAsset.modelo && (
-            <span className="text-xs text-gray-500">{record.linkedAsset.modelo}</span>
-          )}
+          {record.linkedAsset.modelo && <span className="text-xs text-gray-500">{record.linkedAsset.modelo}</span>}
         </div>
       ),
     },
@@ -533,7 +511,7 @@ export default function NonConformitiesOverviewPage() {
       key: "createdAt",
       label: "Criado em",
       render: (record: NonConformity) => (
-        <span className="text-sm text-[var(--hint)]">{dateFormatter.format(new Date(record.createdAt))}</span>
+        <span className="text-sm text-[var(--hint)]">{LONG_DATE_FORMATTER.format(new Date(record.createdAt))}</span>
       ),
     },
     {
@@ -550,7 +528,7 @@ export default function NonConformitiesOverviewPage() {
                   : "bg-emerald-100 text-emerald-700 border border-emerald-200",
               ].join(" ")}
             >
-              {shortDateFormatter.format(new Date(record.dueAt))}
+              {SHORT_DATE_FORMATTER.format(new Date(record.dueAt))}
             </span>
           ) : (
             <span className="text-xs text-gray-400">—</span>
@@ -561,14 +539,14 @@ export default function NonConformitiesOverviewPage() {
     },
     {
       key: "owner",
-      label: "Responsavel",
+      label: "Responsável",
       render: (record: NonConformity) => (
         <span className="text-sm text-[var(--hint)]">{getCorrectiveOwner(record) ?? "–"}</span>
       ),
     },
     {
       key: "recurrence",
-      label: "Recorrencia",
+      label: "Recorrência",
       render: (record: NonConformity) => (
         <span className="text-sm text-[var(--hint)]">{record.recurrenceOfId ? "Sim" : "Não"}</span>
       ),
@@ -578,33 +556,29 @@ export default function NonConformitiesOverviewPage() {
   return (
     <div className="space-y-8">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900">Gestao de não conformidades</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Gestão de não conformidades</h1>
         <p className="text-sm text-[var(--hint)]">
-          Consolide NCs de checklists e adicionais, acompanhe SLA, recorrencia e CAPA.
+          Consolide NCs de checklists e adicionais, acompanhe SLA, recorrência e CAPA.
         </p>
       </div>
 
       {kpis && (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <KpiTile label="NCs abertas" value={kpis.openTotal} helperText="Total em andamento" />
           <KpiTile
-            label="NCs abertas"
-            value={kpis.openTotal}
-            helperText="Total em andamento"
-          />
-          <KpiTile
-            label="% no prazo (mes)"
+            label="% no prazo (mês)"
             value={`${kpis.onTimePercentage.toFixed(1)}%`}
             helperText="Fechadas dentro do SLA"
           />
           <KpiTile
-            label="Recorrencia ultimos 30d"
+            label="Recorrência últimos 30d"
             value={`${kpis.recurrence30d.toFixed(1)}%`}
             helperText="NCs reabertas"
           />
           <KpiTile
-            label="Tempo ate resolucao"
+            label="Tempo até resolução"
             value={`${kpis.avgResolutionHours.toFixed(1)} h`}
-            helperText={`Containment medio ${kpis.avgContainmentHours.toFixed(1)} h`}
+            helperText={`Containment médio ${kpis.avgContainmentHours.toFixed(1)} h`}
           />
         </div>
       )}
@@ -648,7 +622,7 @@ export default function NonConformitiesOverviewPage() {
                     <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} allowDecimals={false} />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="value" name="Ocorrencias" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="value" name="Ocorrências" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -667,14 +641,14 @@ export default function NonConformitiesOverviewPage() {
                     <Legend />
                     <Tooltip />
                     <Bar dataKey="alta" stackId="a" fill="#ef4444" name="Alta" />
-                    <Bar dataKey="media" stackId="a" fill="#f59e0b" name="Media" />
+                    <Bar dataKey="media" stackId="a" fill="#f59e0b" name="Média" />
                     <Bar dataKey="baixa" stackId="a" fill="#10b981" name="Baixa" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">Distribuicao por severidade</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Distribuição por severidade</h2>
               <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
                 {Object.entries(kpis.openBySeverity).map(([severity, value]) => (
                   <div key={severity} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
@@ -684,7 +658,7 @@ export default function NonConformitiesOverviewPage() {
                 ))}
               </div>
               <p className="text-xs text-gray-500">
-                Metricas calculadas com base nas {Math.min(MAX_PAGE_SIZE, total)} ultimas ocorrencias carregadas.
+                Métricas calculadas com base nas {Math.min(MAX_PAGE_SIZE, total)} últimas ocorrências carregadas.
               </p>
             </div>
           </div>
@@ -696,7 +670,7 @@ export default function NonConformitiesOverviewPage() {
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-gray-900">Lista de não conformidades</h2>
             <p className="text-sm text-[var(--hint)]">
-              Filtre e atualize status, responsaveis e SLAs das NCs provenientes dos checklists.
+              Filtre e atualize status, responsáveis e SLAs das NCs provenientes dos checklists.
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -722,6 +696,7 @@ export default function NonConformitiesOverviewPage() {
             }
           />
         )}
+
         {massMessage && <Alert variant={massMessage.type === "success" ? "success" : "error"} description={massMessage.text} />}
 
         <DataTable
@@ -744,7 +719,3 @@ export default function NonConformitiesOverviewPage() {
     </div>
   );
 }
-
-
-
-
