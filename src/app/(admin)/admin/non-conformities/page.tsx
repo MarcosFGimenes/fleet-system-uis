@@ -161,7 +161,7 @@ async function patchNc(id: string, body: Record<string, unknown>) {
   }
 }
 
-export default function NonConformitiesOverviewPage(): JSX.Element {
+export default function NonConformitiesOverviewPage() {
   const router = useRouter();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
