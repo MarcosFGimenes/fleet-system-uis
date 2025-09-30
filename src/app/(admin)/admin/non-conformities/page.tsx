@@ -277,7 +277,7 @@ export default function NonConformitiesAdminPage() {
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Não conformidades</h1>
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-gray-600">
             Acompanhe e atualize as tratativas de não conformidades abertas nos checklists.
           </p>
         </div>
@@ -290,14 +290,14 @@ export default function NonConformitiesAdminPage() {
         </button>
       </header>
 
-      <section className="space-y-4 rounded-xl bg-gray-800 p-4">
+      <section className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
             <label className="text-sm">Máquina</label>
             <select
               value={machineFilter}
               onChange={(event) => setMachineFilter(event.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
             >
               <option value="all">Todas</option>
               {machines.map((machine) => (
@@ -312,7 +312,7 @@ export default function NonConformitiesAdminPage() {
             <select
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-              className="mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
             >
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -322,7 +322,7 @@ export default function NonConformitiesAdminPage() {
             </select>
           </div>
           <div>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500">
               Apenas perguntas respondidas como &quot;NC&quot; são exibidas nesta lista para acompanhamento contínuo.
             </p>
           </div>
@@ -333,8 +333,8 @@ export default function NonConformitiesAdminPage() {
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
             feedback.type === "error"
-              ? "border-red-600 bg-red-900/30 text-red-200"
-              : "border-emerald-600 bg-emerald-900/30 text-emerald-200"
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-700"
           }`}
         >
           {feedback.message}
@@ -343,25 +343,25 @@ export default function NonConformitiesAdminPage() {
 
       <section className="space-y-4">
         {loading ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-400">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-500 shadow-sm">
             Carregando não conformidades...
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-400">
+          <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-500 shadow-sm">
             Nenhuma não conformidade encontrada para os filtros selecionados.
           </div>
         ) : (
           filteredItems.map((item, index) => (
             <article
               key={item.id}
-              className="space-y-4 rounded-xl border border-gray-800 bg-gray-900 p-5 shadow-lg shadow-black/20"
+              className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
             >
               <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-gray-900">
                     {index + 1}. {item.questionText}
                   </p>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-500">
                     <span>Checklist enviado em {new Date(item.createdAt).toLocaleString()}</span>
                     {item.template && (
                       <span className="ml-2 block sm:inline">
@@ -369,16 +369,16 @@ export default function NonConformitiesAdminPage() {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-500">
                     Máquina: {item.machine?.modelo ?? item.machineId}
                     {item.machine?.tag ? ` • TAG ${item.machine.tag}` : ""}
                   </div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-500">
                     Operador: {item.operatorNome ?? "Não informado"}
                     {item.operatorMatricula ? ` (Mat. ${item.operatorMatricula})` : ""}
                   </div>
                   {item.observation && (
-                    <p className="text-sm text-gray-300">
+                    <p className="text-sm text-gray-700">
                       Observações do operador: {item.observation}
                     </p>
                   )}
@@ -387,7 +387,7 @@ export default function NonConformitiesAdminPage() {
                       href={item.photoUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs font-medium text-blue-300 underline"
+                      className="text-xs font-medium text-blue-600 underline"
                     >
                       Ver evidência
                     </a>
@@ -397,10 +397,10 @@ export default function NonConformitiesAdminPage() {
                   <span
                     className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
                       item.draftStatus === "open"
-                        ? "bg-red-700 text-white"
+                        ? "bg-red-100 text-red-700"
                         : item.draftStatus === "in_progress"
-                        ? "bg-yellow-600 text-black"
-                        : "bg-emerald-700 text-white"
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-emerald-100 text-emerald-700"
                     }`}
                   >
                     {statusLabel[item.draftStatus]}
@@ -409,8 +409,8 @@ export default function NonConformitiesAdminPage() {
                     <span
                       className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
                         item.recurrenceStatus === "still_nc"
-                          ? "bg-amber-400 text-black"
-                          : "bg-emerald-600 text-white"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-100 text-emerald-700"
                       }`}
                     >
                       Reincidência ·
@@ -422,7 +422,7 @@ export default function NonConformitiesAdminPage() {
                   )}
                   <a
                     href={`/responses/${item.responseId}`}
-                    className="rounded-md border border-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-gray-500 hover:bg-gray-800"
+                    className="rounded-md border border-gray-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700 transition hover:border-gray-400 hover:bg-gray-50"
                   >
                     Ver checklist
                   </a>
@@ -431,33 +431,33 @@ export default function NonConformitiesAdminPage() {
 
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-gray-300">Tratativa planejada</span>
+                  <span className="text-xs uppercase tracking-wide text-gray-600">Tratativa planejada</span>
                   <textarea
                     value={item.summary}
                     onChange={(event) => updateItemField(item.id, { summary: event.target.value })}
-                    className="min-h-[96px] rounded-lg border border-gray-700 bg-gray-900/70 p-3 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
+                    className="min-h-[96px] rounded-lg border border-gray-300 bg-white p-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-sm focus:border-blue-500 focus:outline-none"
                     placeholder="Descreva a ação corretiva e preventiva"
                   />
                 </label>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="flex flex-col gap-2 text-sm">
-                    <span className="text-xs uppercase tracking-wide text-gray-300">Responsável</span>
+                    <span className="text-xs uppercase tracking-wide text-gray-600">Responsável</span>
                     <input
                       value={item.responsible}
                       onChange={(event) => updateItemField(item.id, { responsible: event.target.value })}
-                      className="rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 shadow-sm focus:border-blue-500 focus:outline-none"
                       placeholder="Nome do responsável"
                     />
                   </label>
                   <label className="flex flex-col gap-2 text-sm">
-                    <span className="text-xs uppercase tracking-wide text-gray-300">Prazo</span>
+                    <span className="text-xs uppercase tracking-wide text-gray-600">Prazo</span>
                     <input
                       type="date"
                       value={item.deadline ?? ""}
                       onChange={(event) =>
                         updateItemField(item.id, { deadline: event.target.value || undefined })
                       }
-                      className="rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none"
                     />
                   </label>
                 </div>
@@ -473,7 +473,7 @@ export default function NonConformitiesAdminPage() {
                       className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
                         item.draftStatus === status
                           ? "bg-blue-600 text-white"
-                          : "bg-gray-800 text-gray-200 hover:bg-gray-700"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
                       {statusLabel[status]}

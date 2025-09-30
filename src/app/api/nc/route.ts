@@ -11,67 +11,6 @@ import type { NcStatus, NonConformity, Severity } from "@/types/nonconformity";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ChecklistAnswer = {
-  questionId: string;
-  response?: string;
-  photoUrls?: unknown;
-};
-
-type ChecklistResponseDoc = {
-  answers?: ChecklistAnswer[];
-  createdAt?: string;
-  createdAtTs?: Timestamp;
-  horimetro?: number;
-  machineId?: string;
-  operatorMatricula?: string;
-  operatorNome?: string;
-  templateId?: string;
-  templateVersion?: number;
-  templateTitle?: string;
-  templateType?: string;
-  userId?: string;
-};
-
-type TemplateQuestion = {
-  id: string;
-  text?: string;
-  requiresPhoto?: boolean;
-};
-
-type ChecklistTemplateDoc = {
-  title?: string;
-  type?: string;
-  isActive?: boolean;
-  version?: number;
-  questions?: TemplateQuestion[];
-};
-
-import type { NcStatus, Severity } from "@/types/nonconformity";
-
-type NormalizedNc = {
-  id: string;
-  checklistResponseId: string;
-  questionId: string;
-  questionText: string;
-  requiresPhoto: boolean;
-  photoUrls: string[];
-  response: "nc";
-  evidenceStatus: "ok" | "missing_required_photo";
-  status: NcStatus;
-  severity: Severity;
-  machineId: string;
-  templateId: string;
-  templateTitle: string;
-  templateType: string | null;
-  operatorMatricula: string | null;
-  operatorNome: string | null;
-  horimetro: number | null;
-  createdAt: string;
-};
-
-type NormalizedNcWithMeta = NormalizedNc & { sortKey: number };
-
-const MAX_RESPONSE_FETCH = 500;
 const MAX_FETCH = 500;
 
 const STATUS_VALUES: readonly NcStatus[] = [
@@ -97,14 +36,7 @@ function isMissingIndexError(error: unknown): boolean {
 
 const querySchema = z
   .object({
-    status: z.string().optional(),
-    severity: z.string().optional(),
-    assetId: z.string().optional(),
-    dateFrom: z.string().optional(),
-    dateTo: z.string().optional(),
-    q: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).default(20),
     pageSize: z
       .coerce.number()
       .int()
@@ -148,69 +80,6 @@ function withinRange(target: Date | null, from?: Date | null, to?: Date | null):
   return true;
 }
 
-function formatTemplateQuestionMap(template: ChecklistTemplateDoc | null | undefined) {
-  const map = new Map<string, TemplateQuestion>();
-  if (!template?.questions) return map;
-  for (const question of template.questions) {
-    if (question?.id) {
-      map.set(question.id, question);
-    }
-  }
-  return map;
-}
-
-function normalizeNc(
-  responseId: string,
-  answer: ChecklistAnswer,
-  question: TemplateQuestion | undefined,
-  response: ChecklistResponseDoc,
-  createdAtISO: string,
-  sortKey: number,
-  templateId: string,
-): NormalizedNcWithMeta {
-  const requiresPhoto = Boolean(question?.requiresPhoto);
-  const photoUrls = normalizePhotoUrls(answer.photoUrls);
-  const evidenceStatus = requiresPhoto && photoUrls.length === 0 ? "missing_required_photo" : "ok";
-
-  const questionText = sanitizeString(question?.text) ?? "(pergunta não encontrada)";
-
-  // Assuming default status and severity if not explicitly available in ChecklistResponseDoc
-  // In a real scenario, these might be derived from the checklist response or question itself.
-  const status: NcStatus = "aberta"; // Default status
-  const severity: Severity = "baixa"; // Default severity
-
-  return {
-    id: `nc::${responseId}::${answer.questionId}`,
-    checklistResponseId: responseId,
-    questionId: answer.questionId,
-    questionText,
-    requiresPhoto,
-    photoUrls,
-    response: "nc",
-    evidenceStatus,
-    status,
-    severity,
-    machineId: sanitizeString(response.machineId) ?? "",
-    templateId,
-    templateTitle: sanitizeString(response.templateTitle) ?? questionText,
-    templateType: sanitizeString(response.templateType) ?? null,
-    operatorMatricula: sanitizeString(response.operatorMatricula),
-    operatorNome: sanitizeString(response.operatorNome),
-    horimetro: typeof response.horimetro === "number" ? response.horimetro : null,
-    createdAt: createdAtISO,
-    sortKey,
-  };
-}
-
-function pickTemplateMetadata(template: ChecklistTemplateDoc | null | undefined) {
-  if (!template) {
-    return { title: "(template não encontrado)", type: null as string | null };
-  }
-
-  return {
-    title: sanitizeString(template.title) ?? "(template sem título)",
-    type: sanitizeString(template.type),
-  };
 function matchesSearch(record: NonConformity, searchTerm: string | null): boolean {
   if (!searchTerm) return true;
   const normalized = searchTerm.toLowerCase();
@@ -251,12 +120,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { page, pageSize, status, severity, assetId, dateFrom, dateTo, q } = parsed.data;
-
-  const parsedDateFrom = dateFrom ? new Date(dateFrom) : undefined;
-  const parsedDateTo = dateTo ? new Date(dateTo) : undefined;
-
-  if (parsedDateFrom && parsedDateTo && parsedDateFrom.getTime() > parsedDateTo.getTime()) {
   const {
     page,
     pageSize,
@@ -287,7 +150,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Bad Request",
         details: {
-          formErrors: ["dateFrom must be before dateTo"],
+          formErrors: ["from must be before to"],
           fieldErrors: {},
         },
       },
@@ -297,11 +160,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = getAdminDb();
-    let baseQuery = db.collection("checklistResponses") as Query<DocumentData>;
-
-    // Apply filters from the new query schema
-    if (assetId) {
-      baseQuery = baseQuery.where("machineId", "==", assetId);
     let baseQuery: Query<DocumentData> = db.collection("nonConformities");
 
     if (status) {
@@ -312,13 +170,6 @@ export async function GET(request: NextRequest) {
       baseQuery = baseQuery.where("severity", "==", severity);
     }
 
-    let timestampQuery = baseQuery.orderBy("createdAtTs", "desc");
-
-    if (parsedDateFrom) {
-      timestampQuery = timestampQuery.where("createdAtTs", ">=", Timestamp.fromDate(parsedDateFrom));
-    }
-    if (parsedDateTo) {
-      timestampQuery = timestampQuery.where("createdAtTs", "<=", Timestamp.fromDate(parsedDateTo));
     if (assetId) {
       baseQuery = baseQuery.where("linkedAsset.id", "==", assetId);
     }
@@ -357,12 +208,6 @@ export async function GET(request: NextRequest) {
       docs = fallbackSnapshot.docs;
     }
 
-    if ((parsedDateFrom || parsedDateTo) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
-
-      // Some legacy responses may only have string-based createdAt values.
-      // Fetch an extra window without timestamp filters and rely on in-memory filtering.
-      const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
-      const seenIds = new Set(responseDocs.map((item) => item.id));
     if ((fromDate || toDate) && (!usedFallback || docs.length < fetchLimit)) {
       const fallbackSnapshot = await stringOrderQuery.limit(fetchLimit).get();
       const seen = new Set(docs.map((doc) => doc.id));
@@ -383,49 +228,6 @@ export async function GET(request: NextRequest) {
       const createdAtDate = new Date(record.createdAt);
       const normalizedDate = Number.isNaN(createdAtDate.getTime()) ? null : createdAtDate;
 
-      if (!withinDateRange(createdAtDate, parsedDateFrom, parsedDateTo)) {
-        continue;
-      }
-
-      const answers = Array.isArray(data.answers) ? data.answers : [];
-      if (!answers.length) continue;
-
-      const normalizedTemplateId = sanitizeString(data.templateId);
-      const templateInfo = normalizedTemplateId ? templates.get(normalizedTemplateId) ?? null : null;
-      const questionMap = formatTemplateQuestionMap(templateInfo ?? undefined);
-      const templateMeta = pickTemplateMetadata(templateInfo ?? undefined);
-
-      for (const answer of answers) {
-        if (!answer || answer.response !== "nc" || !answer.questionId) continue;
-
-        const question = questionMap.get(answer.questionId);
-        const sortKey = data.createdAtTs instanceof Timestamp
-          ? data.createdAtTs.toMillis()
-          : createdAtDate?.getTime() ?? 0;
-
-        const baseNc = normalizeNc(
-          responseId,
-          answer,
-          question,
-          data,
-          createdAtISO,
-          sortKey,
-          normalizedTemplateId ?? "",
-        );
-        baseNc.templateTitle = templateMeta.title;
-        baseNc.templateType = templateMeta.type;
-
-        items.push(baseNc);
-      }
-    }
-
-    const searchTerm = q?.toLowerCase() ?? null;
-    const filtered = items.filter((item) => {
-      if (status && item.status !== status) return false;
-      if (severity && item.severity !== severity) return false;
-      if (!searchTerm) return true;
-      const haystack = [item.questionText, item.machineId].map((value) => value.toLowerCase());
-      return haystack.some((value) => value.includes(searchTerm));
       if (!withinRange(normalizedDate, fromDate, toDate)) {
         return false;
       }
@@ -454,7 +256,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: paginated, page, pageSize, total, hasMore });
   } catch (error) {
-    console.error("GET /api/nc failed", error, JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    console.error("GET /api/nc failed", error);
     const requestId = randomUUID();
     return NextResponse.json(
       { error: "Internal Server Error", requestId },
