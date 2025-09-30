@@ -344,6 +344,7 @@ export default function AnalyticsPage() {
                 <p
                   className={`text-sm ${
                     periodicity.summary.nonCompliant > 0 ? "text-red-600" : "text-emerald-600"
+
                   }`}
                 >
                   {periodicity.summary.nonCompliant > 0
