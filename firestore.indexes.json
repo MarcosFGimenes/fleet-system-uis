@@ -55,6 +55,23 @@
         { "fieldPath": "operatorMatricula", "order": "ASCENDING" },
         { "fieldPath": "createdAtTs", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "checklistResponses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "templateId", "order": "ASCENDING" },
+        { "fieldPath": "machineId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "checklistResponses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "templateId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
