@@ -199,6 +199,19 @@ describe("GET /api/nc", () => {
     expect(payload.hasMore).toBe(false);
   });
 
+  it("allows filtering using machineId", async () => {
+    const request = new NextRequest(
+      "http://localhost/api/nc?page=1&pageSize=20&status=aberta&machineId=asset-1",
+    );
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.data).toHaveLength(1);
+    expect(payload.data[0].id).toBe("nc-1");
+    expect(payload.total).toBe(1);
+    expect(payload.hasMore).toBe(false);
+  });
+
   it("validates query params", async () => {
     const request = new NextRequest("http://localhost/api/nc?page=0&dateFrom=2024-02-10&dateTo=2024-02-01");
     const response = await GET(request);
