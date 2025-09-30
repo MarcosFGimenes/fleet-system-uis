@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 
 import { NextRequest, NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
-import type { DocumentData, Query } from "firebase-admin/firestore";
+import { Timestamp, type DocumentData, type Query, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { z } from "zod";
 
 import { getAdminDb } from "@/lib/firebase-admin";
+import { mapNonConformityDoc } from "@/lib/firestore/nc";
+import type { NcStatus, NonConformity, Severity } from "@/types/nonconformity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,17 @@ type NormalizedNc = {
 type NormalizedNcWithMeta = NormalizedNc & { sortKey: number };
 
 const MAX_RESPONSE_FETCH = 500;
+const MAX_FETCH = 500;
+
+const STATUS_VALUES: readonly NcStatus[] = [
+  "aberta",
+  "em_execucao",
+  "aguardando_peca",
+  "bloqueada",
+  "resolvida",
+];
+
+const SEVERITY_VALUES: readonly Severity[] = ["baixa", "media", "alta"];
 
 function isMissingIndexError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -93,53 +105,42 @@ const querySchema = z
     q: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).default(20),
+    pageSize: z
+      .coerce.number()
+      .int()
+      .refine((value) => [10, 20, 50, 100].includes(value), {
+        message: "pageSize must be one of 10, 20, 50 or 100",
+      })
+      .default(20),
+    status: z.enum(STATUS_VALUES as [NcStatus, ...NcStatus[]]).optional(),
+    severity: z.enum(SEVERITY_VALUES as [Severity, ...Severity[]]).optional(),
+    assetId: z.string().trim().min(1).optional(),
+    machineId: z.string().trim().min(1).optional(),
+    templateId: z.string().trim().min(1).optional(),
+    operatorMatricula: z.string().trim().min(1).optional(),
+    q: z.string().trim().min(1).optional(),
+    search: z.string().trim().min(1).optional(),
+    dateFrom: z.string().trim().min(1).optional(),
+    from: z.string().trim().min(1).optional(),
+    dateTo: z.string().trim().min(1).optional(),
+    to: z.string().trim().min(1).optional(),
   })
   .strict();
 
-function sanitizeString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+function parseDate(value: string, options: { endOfDay?: boolean } = {}): Date | null {
   const trimmed = value.trim();
-  return trimmed || null;
+  const isoCandidate = trimmed.length === 10 ? `${trimmed}T00:00:00.000Z` : trimmed;
+  const date = new Date(isoCandidate);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (options.endOfDay) {
+    date.setUTCHours(23, 59, 59, 999);
+  }
+  return date;
 }
 
-
-function normalizePhotoUrls(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter((item) => item.length > 0);
-}
-
-function deriveCreatedAt(
-  doc: ChecklistResponseDoc,
-  snapshotCreatedAt: Timestamp | null,
-): { iso: string | null; date: Date | null } {
-  if (doc.createdAtTs instanceof Timestamp) {
-    const date = doc.createdAtTs.toDate();
-    return { iso: date.toISOString(), date };
-  }
-
-  const fromString = sanitizeString(doc.createdAt ?? null);
-  if (fromString) {
-    const parsed = new Date(fromString);
-    if (!Number.isNaN(parsed.getTime())) {
-      return { iso: parsed.toISOString(), date: parsed };
-    }
-  }
-
-  if (snapshotCreatedAt) {
-    const date = snapshotCreatedAt.toDate();
-    return { iso: date.toISOString(), date };
-  }
-
-  return { iso: null, date: null };
-}
-
-function withinDateRange(
-  target: Date | null,
-  from?: Date,
-  to?: Date,
-): boolean {
+function withinRange(target: Date | null, from?: Date | null, to?: Date | null): boolean {
   if (!from && !to) return true;
   if (!target) return false;
   if (from && target.getTime() < from.getTime()) return false;
@@ -210,6 +211,33 @@ function pickTemplateMetadata(template: ChecklistTemplateDoc | null | undefined)
     title: sanitizeString(template.title) ?? "(template sem título)",
     type: sanitizeString(template.type),
   };
+function matchesSearch(record: NonConformity, searchTerm: string | null): boolean {
+  if (!searchTerm) return true;
+  const normalized = searchTerm.toLowerCase();
+  const haystack = [
+    record.title,
+    record.description ?? "",
+    record.linkedAsset?.tag ?? "",
+    record.linkedAsset?.modelo ?? "",
+    record.linkedAsset?.setor ?? "",
+    record.createdBy?.nome ?? "",
+    record.createdBy?.matricula ?? "",
+    record.rootCause ?? "",
+    record.originChecklistResponseId ?? "",
+    record.originQuestionId ?? "",
+    record.systemCategory ?? "",
+  ]
+    .filter((value) => typeof value === "string" && value)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(normalized);
+}
+
+function deriveSortKey(record: NonConformity): number {
+  const createdAtDate = new Date(record.createdAt);
+  if (Number.isNaN(createdAtDate.getTime())) return 0;
+  return createdAtDate.getTime();
 }
 
 export async function GET(request: NextRequest) {
@@ -229,6 +257,32 @@ export async function GET(request: NextRequest) {
   const parsedDateTo = dateTo ? new Date(dateTo) : undefined;
 
   if (parsedDateFrom && parsedDateTo && parsedDateFrom.getTime() > parsedDateTo.getTime()) {
+  const {
+    page,
+    pageSize,
+    status,
+    severity,
+    assetId: requestedAssetId,
+    machineId,
+    templateId,
+    operatorMatricula,
+    q,
+    search,
+    dateFrom: rawDateFrom,
+    from,
+    dateTo: rawDateTo,
+    to,
+  } = parsed.data;
+
+  const assetId = requestedAssetId ?? machineId ?? null;
+  const searchTerm = q ?? search ?? null;
+  const dateFrom = rawDateFrom ?? from ?? null;
+  const dateTo = rawDateTo ?? to ?? null;
+
+  const fromDate = dateFrom ? parseDate(dateFrom) : null;
+  const toDate = dateTo ? parseDate(dateTo, { endOfDay: true }) : null;
+
+  if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
     return NextResponse.json(
       {
         error: "Bad Request",
@@ -248,6 +302,14 @@ export async function GET(request: NextRequest) {
     // Apply filters from the new query schema
     if (assetId) {
       baseQuery = baseQuery.where("machineId", "==", assetId);
+    let baseQuery: Query<DocumentData> = db.collection("nonConformities");
+
+    if (status) {
+      baseQuery = baseQuery.where("status", "==", status);
+    }
+
+    if (severity) {
+      baseQuery = baseQuery.where("severity", "==", severity);
     }
 
     let timestampQuery = baseQuery.orderBy("createdAtTs", "desc");
@@ -257,43 +319,42 @@ export async function GET(request: NextRequest) {
     }
     if (parsedDateTo) {
       timestampQuery = timestampQuery.where("createdAtTs", "<=", Timestamp.fromDate(parsedDateTo));
+    if (assetId) {
+      baseQuery = baseQuery.where("linkedAsset.id", "==", assetId);
     }
 
     const fetchLimit = Math.min(
-      MAX_RESPONSE_FETCH,
+      MAX_FETCH,
       Math.max(page * pageSize + pageSize, pageSize * 2),
     );
 
-    let responseDocs = [] as {
-      id: string;
-      data: ChecklistResponseDoc;
-      createTime: Timestamp | null;
-    }[];
-    let usedIndexFallback = false;
+    let timestampQuery = baseQuery.orderBy("createdAtTs", "desc");
+    if (fromDate) {
+      timestampQuery = timestampQuery.where("createdAtTs", ">=", Timestamp.fromDate(fromDate));
+    }
+    if (toDate) {
+      timestampQuery = timestampQuery.where("createdAtTs", "<=", Timestamp.fromDate(toDate));
+    }
+
+    const stringOrderQuery = baseQuery.orderBy("createdAt", "desc");
+
+    let docs: QueryDocumentSnapshot<DocumentData>[] = [];
+    let usedFallback = false;
 
     try {
       const snapshot = await timestampQuery.limit(fetchLimit).get();
-      responseDocs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        data: doc.data() as ChecklistResponseDoc,
-        createTime: doc.createTime ?? null,
-      }));
+      docs = snapshot.docs;
     } catch (error) {
       if (!isMissingIndexError(error)) {
         throw error;
       }
-
-      usedIndexFallback = true;
+      usedFallback = true;
       console.warn(
-        "Falling back to unindexed checklistResponses query; createdAtTs index missing",
+        "Falling back to createdAt ordering for nonConformities query; createdAtTs index missing",
         error,
       );
-      const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
-      responseDocs = fallbackSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        data: doc.data() as ChecklistResponseDoc,
-        createTime: doc.createTime ?? null,
-      }));
+      const fallbackSnapshot = await stringOrderQuery.limit(fetchLimit).get();
+      docs = fallbackSnapshot.docs;
     }
 
     if ((parsedDateFrom || parsedDateTo) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
@@ -302,33 +363,25 @@ export async function GET(request: NextRequest) {
       // Fetch an extra window without timestamp filters and rely on in-memory filtering.
       const fallbackSnapshot = await baseQuery.limit(fetchLimit).get();
       const seenIds = new Set(responseDocs.map((item) => item.id));
+    if ((fromDate || toDate) && (!usedFallback || docs.length < fetchLimit)) {
+      const fallbackSnapshot = await stringOrderQuery.limit(fetchLimit).get();
+      const seen = new Set(docs.map((doc) => doc.id));
       for (const doc of fallbackSnapshot.docs) {
-        if (seenIds.has(doc.id)) continue;
-        responseDocs.push({ id: doc.id, data: doc.data() as ChecklistResponseDoc, createTime: doc.createTime ?? null });
+        if (!seen.has(doc.id)) {
+          docs.push(doc);
+        }
       }
     }
 
-    const templateIds = new Set(
-      responseDocs
-        .map(({ data }) => sanitizeString(data.templateId))
-        .filter((value): value is string => Boolean(value)),
-    );
+    const mapped = new Map<string, { record: NonConformity; sortKey: number }>();
+    for (const doc of docs) {
+      const record = mapNonConformityDoc(doc);
+      mapped.set(record.id, { record, sortKey: deriveSortKey(record) });
+    }
 
-    const templateCollection = db.collection("checklistTemplates");
-    const templateEntries = await Promise.all(
-      Array.from(templateIds).map(async (id) => {
-        const snapshot = await templateCollection.doc(id).get();
-        if (!snapshot.exists) return [id, null] as const;
-        return [id, snapshot.data() as ChecklistTemplateDoc] as const;
-      }),
-    );
-
-    const templates = new Map<string, ChecklistTemplateDoc | null>(templateEntries);
-
-    const items: NormalizedNcWithMeta[] = [];
-    for (const { id: responseId, data, createTime } of responseDocs) {
-      const { iso: createdAtISO, date: createdAtDate } = deriveCreatedAt(data, createTime);
-      if (!createdAtISO) continue;
+    const filtered = Array.from(mapped.values()).filter(({ record }) => {
+      const createdAtDate = new Date(record.createdAt);
+      const normalizedDate = Number.isNaN(createdAtDate.getTime()) ? null : createdAtDate;
 
       if (!withinDateRange(createdAtDate, parsedDateFrom, parsedDateTo)) {
         continue;
@@ -373,16 +426,30 @@ export async function GET(request: NextRequest) {
       if (!searchTerm) return true;
       const haystack = [item.questionText, item.machineId].map((value) => value.toLowerCase());
       return haystack.some((value) => value.includes(searchTerm));
+      if (!withinRange(normalizedDate, fromDate, toDate)) {
+        return false;
+      }
+
+      if (templateId && record.linkedTemplateId !== templateId) {
+        return false;
+      }
+
+      if (operatorMatricula && record.createdBy?.matricula !== operatorMatricula) {
+        return false;
+      }
+
+      if (!matchesSearch(record, searchTerm)) {
+        return false;
+      }
+
+      return true;
     });
 
-    filtered.sort((a, b) => b.sortKey - a.sortKey);
+    filtered.sort((a, b) => b.sortKey - a.sortKey || a.record.id.localeCompare(b.record.id));
 
     const total = filtered.length;
     const start = (page - 1) * pageSize;
-    const paginated = filtered.slice(start, start + pageSize).map(({ sortKey, ...rest }) => {
-      void sortKey;
-      return rest;
-    });
+    const paginated = filtered.slice(start, start + pageSize).map((item) => item.record);
     const hasMore = start + pageSize < total;
 
     return NextResponse.json({ data: paginated, page, pageSize, total, hasMore });
