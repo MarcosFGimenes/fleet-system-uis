@@ -292,7 +292,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold">Indicadores</h1>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[var(--muted)]">
           Visao geral de conformidades, inconformidades e tempos medios de solucao.
         </p>
       </header>
@@ -303,7 +303,7 @@ export default function AnalyticsPage() {
           <button
             type="button"
             onClick={() => refreshPeriodicity()}
-            className="rounded-md border border-gray-600 bg-gray-800 px-3 py-1 text-sm hover:bg-gray-700 disabled:opacity-60"
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-sm font-medium text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)] disabled:opacity-60"
             disabled={periodicityLoading}
           >
             {periodicityLoading ? "Atualizando..." : "Atualizar"}
@@ -311,13 +311,13 @@ export default function AnalyticsPage() {
         </div>
 
         {periodicityError && (
-          <div className="rounded-md border border-red-500/60 bg-red-900/30 p-4 text-sm text-red-100">
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {periodicityError}
           </div>
         )}
 
         {periodicity && trackedCount === 0 && !periodicityError && (
-          <div className="rounded-md border border-gray-700 bg-gray-800 p-4 text-sm text-gray-300">
+          <div className="rounded-md border border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)] shadow-sm">
             Nenhuma exigência de periodicidade ativa.
           </div>
         )}
@@ -326,15 +326,15 @@ export default function AnalyticsPage() {
           <div
             className={`rounded-md border p-4 ${
               periodicity.summary.nonCompliant > 0
-                ? "border-red-500/70 bg-red-950/40"
-                : "border-emerald-600/60 bg-emerald-950/30"
+                ? "border-red-200 bg-red-50"
+                : "border-emerald-200 bg-emerald-50"
             }`}
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3
                   className={`text-base font-semibold ${
-                    periodicity.summary.nonCompliant > 0 ? "text-red-200" : "text-emerald-200"
+                    periodicity.summary.nonCompliant > 0 ? "text-red-700" : "text-emerald-700"
                   }`}
                 >
                   {periodicity.summary.nonCompliant > 0
@@ -343,20 +343,21 @@ export default function AnalyticsPage() {
                 </h3>
                 <p
                   className={`text-sm ${
-                    periodicity.summary.nonCompliant > 0 ? "text-red-100/80" : "text-emerald-100/80"
+                    periodicity.summary.nonCompliant > 0 ? "text-red-600" : "text-emerald-600"
+
                   }`}
                 >
                   {periodicity.summary.nonCompliant > 0
                     ? `${periodicity.summary.nonCompliant} de ${trackedCount} itens estão atrasados.`
                     : `${trackedCount} itens monitorados estão em conformidade.`}
                 </p>
-                <p className="mt-1 text-xs text-gray-300/80">
+                <p className="mt-1 text-xs text-[var(--hint)]">
                   Última verificação: {formatDatePtBr(periodicity.generatedAt)} (UTC)
                 </p>
               </div>
 
               {periodicity.summary.nonCompliant > 0 && (
-                <span className="inline-flex items-center gap-2 rounded-full bg-red-600/80 px-3 py-1 text-xs font-semibold text-white">
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
                   Fora da periodicidade
                 </span>
               )}
@@ -367,18 +368,18 @@ export default function AnalyticsPage() {
                 {nonCompliantItems.map((item) => (
                   <div
                     key={`${item.templateId}-${item.machineId}`}
-                    className="rounded-md border border-red-500/40 bg-red-900/30 p-3"
+                    className="rounded-md border border-red-200 bg-white p-3 shadow-sm"
                   >
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-red-100">{item.templateName}</p>
-                        <p className="text-xs text-red-100/80">{item.machineName ?? item.machineId}</p>
+                        <p className="text-sm font-semibold text-red-700">{item.templateName}</p>
+                        <p className="text-xs text-red-600">{item.machineName ?? item.machineId}</p>
                       </div>
-                      <span className="inline-flex items-center rounded-full bg-red-700/80 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
                         Fora da periodicidade
                       </span>
                     </div>
-                    <div className="mt-2 space-y-1 text-xs text-red-100/80">
+                    <div className="mt-2 space-y-1 text-xs text-red-600">
                       <p>Último envio: {formatDatePtBr(item.lastSubmissionAt)}</p>
                       <p>Exigido: {renderRequirement(item)}</p>
                     </div>
@@ -468,7 +469,7 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-[var(--hint)]">
         Observacao: o tempo medio de reparacao considera o intervalo entre a primeira ocorrencia de NC e o
         primeiro OK subsequente para a mesma maquina, template e pergunta na janela carregada.
       </p>

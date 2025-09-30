@@ -231,12 +231,12 @@ export default function ResponsesAdminPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Checklists Enviados</h1>
       </header>
 
-      <section className="bg-[var(--surface)] p-4 rounded-xl">
+      <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
         <div className="grid grid-cols-1 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <label className="text-sm">Maquina</label>
@@ -245,7 +245,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ machineId: event.target.value as FilterState["machineId"] })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             >
               <option value="all">Todas</option>
               {machines.map((machine) => (
@@ -262,7 +262,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ hasNC: event.target.value as FilterState["hasNC"] })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             >
               <option value="all">Todos</option>
               <option value="yes">Somente com NC</option>
@@ -277,7 +277,7 @@ export default function ResponsesAdminPage() {
               onChange={(event) =>
                 onFilterChange({ matricula: event.target.value || undefined })
               }
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             />
           </div>
           <div>
@@ -286,7 +286,7 @@ export default function ResponsesAdminPage() {
               type="date"
               value={filter.from ?? ""}
               onChange={(event) => onFilterChange({ from: event.target.value || undefined })}
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             />
           </div>
           <div>
@@ -295,7 +295,7 @@ export default function ResponsesAdminPage() {
               type="date"
               value={filter.to ?? ""}
               onChange={(event) => onFilterChange({ to: event.target.value || undefined })}
-              className="w-full bg-[var(--surface)] border border-gray-700 rounded-md px-3 py-2"
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             />
           </div>
         </div>
@@ -307,7 +307,7 @@ export default function ResponsesAdminPage() {
                 void handleExportPeriod();
               }}
               disabled={periodExporting || loading || rows.length === 0}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {periodExporting ? "Exportando..." : "Exportar período (PDF)"}
             </button>
@@ -316,7 +316,7 @@ export default function ResponsesAdminPage() {
                 void handleDeletePeriod();
               }}
               disabled={periodDeleting || loading || rows.length === 0}
-              className="rounded-md border border-red-600 px-4 py-2 text-sm font-medium text-red-200 transition hover:bg-red-600/20 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md border border-[var(--danger)] px-4 py-2 text-sm font-semibold text-[var(--danger)] transition hover:bg-[var(--danger)]/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {periodDeleting ? "Excluindo..." : "Excluir período"}
             </button>
@@ -324,58 +324,58 @@ export default function ResponsesAdminPage() {
           <button
             onClick={applyFilters}
             disabled={loading}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-700)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Carregando..." : "Aplicar Filtros"}
           </button>
         </div>
       </section>
 
-      <section className="bg-[var(--surface)] rounded-xl overflow-hidden">
+      <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-700">
+            <thead className="bg-[var(--surface)] text-left text-[var(--hint)]">
               <tr>
-                <th className="text-left px-4 py-3">Data</th>
-                <th className="text-left px-4 py-3">Máquina</th>
-                <th className="text-left px-4 py-3">Template</th>
-                <th className="text-left px-4 py-3">KM/Hor</th>
-                <th className="text-left px-4 py-3">NC</th>
-                <th className="text-left px-4 py-3">Respondido por</th>
-                <th className="text-right px-4 py-3">Acoes</th>
+                <th className="px-4 py-3 font-medium">Data</th>
+                <th className="px-4 py-3 font-medium">Máquina</th>
+                <th className="px-4 py-3 font-medium">Template</th>
+                <th className="px-4 py-3 font-medium">KM/Hor</th>
+                <th className="px-4 py-3 font-medium">NC</th>
+                <th className="px-4 py-3 font-medium">Respondido por</th>
+                <th className="px-4 py-3 text-right font-medium">Acoes</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-6 text-center text-[var(--hint)]">
                     Carregando...
                   </td>
                 </tr>
               )}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                  <td colSpan={7} className="px-4 py-6 text-center text-[var(--hint)]">
                     Nenhum checklist encontrado.
                   </td>
                 </tr>
               )}
               {!loading &&
                 rows.map((row) => (
-                  <tr key={row.id} className="border-t border-gray-700">
-                    <td className="px-4 py-3 whitespace-nowrap">
+                  <tr key={row.id} className="border-t border-[var(--border)] bg-white text-[var(--text)]">
+                    <td className="whitespace-nowrap px-4 py-3">
                       {new Date(row.createdAt).toLocaleString()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium">{row.machine?.modelo ?? row.machineId}</div>
-                      <div className="mt-1 space-y-0.5 text-xs text-gray-400">
+                      <div className="mt-1 space-y-0.5 text-xs text-[var(--hint)]">
                         <p>TAG: {row.machine?.tag ?? "-"}</p>
                         <p>Placa: {row.machine?.placa ?? "-"}</p>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       {row.template?.title ?? row.templateId}
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-[var(--hint)]">
                         {row.template ? `${row.template.type} v${row.template.version}` : ""}
                       </div>
                     </td>
@@ -388,8 +388,10 @@ export default function ResponsesAdminPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`px-2 py-1 rounded-md text-xs ${
-                          row.ncCount > 0 ? "bg-red-700" : "bg-emerald-700"
+                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${
+                          row.ncCount > 0
+                            ? "bg-red-100 text-red-700"
+                            : "bg-emerald-100 text-emerald-700"
                         }`}
                       >
                         {row.ncCount > 0 ? `${row.ncCount} NC` : "Sem NC"}
@@ -399,7 +401,7 @@ export default function ResponsesAdminPage() {
                       <div className="text-sm">
                         {row.operatorNome ? row.operatorNome : "—"}
                         {row.operatorMatricula ? (
-                          <span className="text-xs text-gray-400"> ( {row.operatorMatricula} )</span>
+                          <span className="text-xs text-[var(--hint)]"> ( {row.operatorMatricula} )</span>
                         ) : null}
                       </div>
                     </td>
@@ -410,13 +412,13 @@ export default function ResponsesAdminPage() {
                           onClick={() => {
                             void handleExportSingle(row);
                           }}
-                          className="rounded-md bg-blue-600 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-blue-500"
+                          className="rounded-md bg-[var(--primary)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-sm transition hover:bg-[var(--primary-700)]"
                         >
                           PDF
                         </button>
                         <a
                           href={`/admin/responses/${row.id}`}
-                          className="rounded-md bg-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-gray-600"
+                          className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)]"
                         >
                           Ver
                         </a>

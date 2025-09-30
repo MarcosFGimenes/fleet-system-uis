@@ -160,11 +160,11 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="md:col-span-2">
           <label className="text-sm">Titulo</label>
           <input
-            className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Checklist Diario Operador"
@@ -173,7 +173,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         <div>
           <label className="text-sm">Tipo</label>
           <select
-            className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             value={type}
             onChange={(event) => setType(event.target.value as "operador" | "mecanico")}
           >
@@ -185,7 +185,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           <label className="text-sm">Versao</label>
           <input
             type="number"
-            className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             value={version}
             min={1}
             onChange={(event) => setVersion(Number(event.target.value))}
@@ -206,11 +206,11 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         </label>
       </div>
 
-      <section className="space-y-3 rounded-lg border border-gray-700 bg-gray-800 p-4">
+      <section className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-semibold">Periodicidade mínima</h3>
-            <p className="text-xs text-gray-400">{periodicityHelper}</p>
+            <p className="text-xs text-[var(--muted)]">{periodicityHelper}</p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -238,7 +238,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                     setPeriodicityQuantity(value);
                   }
                 }}
-                className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               />
             </label>
 
@@ -249,7 +249,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                 onChange={(event) =>
                   setPeriodicityUnit(event.target.value as ChecklistPeriodicityUnit)
                 }
-                className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               >
                 <option value="day">Dia</option>
                 <option value="week">Semana</option>
@@ -266,7 +266,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           <button
             type="button"
             onClick={addQuestion}
-            className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-700"
+            className="rounded-md bg-[var(--primary)] px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-700)]"
           >
             + Adicionar Pergunta
           </button>
@@ -276,12 +276,12 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           {questions.map((question, index) => (
             <div
               key={question.id}
-              className="p-3 bg-gray-800 rounded-lg border border-gray-700"
+              className="rounded-lg border border-[var(--border)] bg-white p-3 shadow-sm"
             >
               <div className="flex items-start gap-3">
-                <span className="mt-2 text-sm text-gray-400">{index + 1}.</span>
+                <span className="mt-2 text-sm text-[var(--muted)]">{index + 1}.</span>
                 <textarea
-                  className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2"
+                  className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                   value={question.text}
                   onChange={(event) =>
                     updateQuestion(question.id, { text: event.target.value })
@@ -293,7 +293,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
 
               <div className="mt-2 flex items-center justify-between">
                 <label className="flex flex-col gap-2 text-sm">
-                  <span className="text-xs uppercase tracking-wide text-gray-400">
+                  <span className="text-xs uppercase tracking-wide text-[var(--hint)]">
                     Fotos
                   </span>
                   <select
@@ -303,7 +303,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                         photoRule: event.target.value as ChecklistPhotoRule,
                       })
                     }
-                    className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+                    className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                   >
                     {Object.entries(photoRuleLabel).map(([value, label]) => (
                       <option key={value} value={value}>
@@ -316,7 +316,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                 <button
                   type="button"
                   onClick={() => removeQuestion(question.id)}
-                  className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-700"
+                  className="rounded-md border border-[var(--danger)] px-3 py-1 text-sm font-semibold text-[var(--danger)] transition hover:bg-[var(--danger)]/10"
                 >
                   Remover
                 </button>
@@ -325,7 +325,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           ))}
 
           {questions.length === 0 && (
-            <p className="text-sm text-gray-400">Nenhuma pergunta adicionada.</p>
+            <p className="text-sm text-[var(--hint)]">Nenhuma pergunta adicionada.</p>
           )}
         </div>
       </div>
@@ -333,7 +333,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       <div className="flex items-center gap-2">
         <button
           type="submit"
-          className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 font-semibold"
+          className="rounded-md bg-emerald-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-emerald-500"
         >
           Salvar Template
         </button>
@@ -341,7 +341,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-md bg-gray-700 hover:bg-gray-600"
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-2 font-semibold text-[var(--text)] shadow-sm transition hover:bg-white"
           >
             Cancelar
           </button>
