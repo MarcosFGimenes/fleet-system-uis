@@ -18,6 +18,18 @@ export interface ChecklistQuestion {
   requiresPhoto?: boolean;
 }
 
+export type ChecklistPeriodicityUnit = "day" | "week" | "month";
+
+export type ChecklistPeriodicityAnchor = "last_submission" | "calendar";
+
+export interface ChecklistTemplatePeriodicity {
+  quantity: number;
+  unit: ChecklistPeriodicityUnit;
+  windowDays: number;
+  anchor: ChecklistPeriodicityAnchor;
+  active: boolean;
+}
+
 export interface ChecklistTemplate {
   id: string;
   type: "operador" | "mecanico";
@@ -25,6 +37,7 @@ export interface ChecklistTemplate {
   version: number;
   isActive: boolean;
   questions: ChecklistQuestion[];
+  periodicity?: ChecklistTemplatePeriodicity;
 }
 
 export type ChecklistRecurrenceStatus = "resolved" | "still_nc";
