@@ -112,12 +112,15 @@ async function fetchMachines(db: Firestore, filters: PeriodicityComplianceFilter
       return [];
     }
     const data = doc.data() as Machine | undefined;
+    const modelo = typeof data?.modelo === "string" && data.modelo.trim() ? data.modelo : doc.id;
+    const setor = typeof data?.setor === "string" ? data.setor : "";
     return [
       {
         id: doc.id,
-        modelo: data?.modelo,
+        modelo,
         tag: data?.tag ?? data?.placa ?? doc.id,
-        setor: data?.setor,
+        setor,
+
         checklists: Array.isArray(data?.checklists) ? data?.checklists : [],
       },
     ];
@@ -126,11 +129,14 @@ async function fetchMachines(db: Firestore, filters: PeriodicityComplianceFilter
   const snapshot = await db.collection("machines").get();
   return snapshot.docs.map((doc) => {
     const data = doc.data() as Machine | undefined;
+    const modelo = typeof data?.modelo === "string" && data.modelo.trim() ? data.modelo : doc.id;
+    const setor = typeof data?.setor === "string" ? data.setor : "";
     return {
       id: doc.id,
-      modelo: data?.modelo,
+      modelo,
       tag: data?.tag ?? data?.placa ?? doc.id,
-      setor: data?.setor,
+      setor,
+
       checklists: Array.isArray(data?.checklists) ? data?.checklists : [],
     } satisfies MachineRecord;
   });

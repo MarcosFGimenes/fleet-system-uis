@@ -22,9 +22,24 @@ function isValidAnchor(value: unknown): value is ChecklistPeriodicityAnchor {
   return value === "last_submission" || value === "calendar";
 }
 
-export async function PATCH(request: NextRequest, context: { params: { templateId?: string } }) {
-  const templateIdRaw = context.params?.templateId;
-  const templateId = typeof templateIdRaw === "string" ? templateIdRaw.trim() : "";
+type RouteContext = {
+  params: Promise<{ templateId: string }>;
+};
+
+async function resolveTemplateId(context: RouteContext): Promise<string | null> {
+  try {
+    const params = await context.params;
+    const raw = typeof params?.templateId === "string" ? params.templateId : "";
+    const normalized = raw.trim();
+    return normalized ? normalized : null;
+  } catch (error) {
+    console.error("PATCH /api/templates/[id]/periodicity resolve params", error);
+    return null;
+  }
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const templateId = await resolveTemplateId(context);
   if (!templateId) {
     return NextResponse.json({ error: "Parâmetro templateId inválido" }, { status: 400 });
   }
