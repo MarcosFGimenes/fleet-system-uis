@@ -10,6 +10,10 @@ export default defineConfig({
       enabled: false,
     },
   },
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),

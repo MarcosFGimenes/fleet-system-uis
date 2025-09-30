@@ -38,12 +38,28 @@ const sanitizeComponent = (value: string) =>
     .replace(/^-+/, "")
     .replace(/-+$/, "");
 
+const parseResponseDate = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const formatResponseDate = (response: ChecklistResponse) => {
-  const parsed = new Date(response.createdAt);
-  if (Number.isNaN(parsed.getTime())) {
-    return response.createdAt.slice(0, 10);
+  const parsed = parseResponseDate(response.createdAt);
+  if (!parsed) {
+    return sanitizeComponent(response.createdAt).slice(0, 10) || "data";
   }
   return parsed.toISOString().slice(0, 10);
+};
+
+const formatResponseTimestamp = (response: ChecklistResponse) => {
+  const parsed = parseResponseDate(response.createdAt);
+  if (!parsed) {
+    return sanitizeComponent(response.createdAt) || "registro";
+  }
+  const iso = parsed.toISOString();
+  const datePart = iso.slice(0, 10).replace(/-/g, "");
+  const timePart = iso.slice(11, 19).replace(/:/g, "");
+  return `${datePart}-${timePart}`;
 };
 
 const buildChecklistDocumentBaseName = (detail: ChecklistPdfDetail, explicitName?: string) => {
@@ -53,9 +69,9 @@ const buildChecklistDocumentBaseName = (detail: ChecklistPdfDetail, explicitName
 
   const plateSource = detail.machine?.placa ?? detail.machine?.tag ?? detail.response.machineId;
   const plate = plateSource ? sanitizeComponent(plateSource).toUpperCase() : "CHECKLIST";
-  const dateLabel = formatResponseDate(detail.response);
+  const timestampLabel = formatResponseTimestamp(detail.response);
 
-  return `(${plate})-${dateLabel}`;
+  return `(${plate})-${timestampLabel}`;
 };
 
 const triggerDownload = (blob: Blob, filename: string) => {
@@ -219,10 +235,10 @@ const appendChecklistToDoc = async (
     const photoUrls = getAnswerPhotoUrls(answer);
     if (photoUrls.length) {
       addParagraph(photoUrls.length > 1 ? "Fotos:" : "Foto:");
-      for (const photoUrl of photoUrls) {
+      for (const [photoIndex, photoUrl] of photoUrls.entries()) {
         const dataUrl = await fetchImageDataUrl(photoUrl);
         if (!dataUrl) {
-          addParagraph(`• ${photoUrl}`);
+          addParagraph("Não foi possível carregar a imagem anexada.");
           continue;
         }
 
@@ -237,10 +253,10 @@ const appendChecklistToDoc = async (
           ensureSpace(linesNeeded);
           doc.addImage(dataUrl, format, margin, y, displayWidth, displayHeight);
           y += displayHeight + 2;
-          addParagraph(photoUrl);
+          addParagraph(`Figura ${photoIndex + 1}`, { spacing: 1 });
         } catch (error) {
           console.error("Falha ao inserir imagem no PDF", error);
-          addParagraph(`• ${photoUrl}`);
+          addParagraph("Não foi possível carregar a imagem anexada.");
         }
       }
     }
@@ -272,6 +288,11 @@ type ZipOptions = {
   filename?: string;
 };
 
+const getResponseTimestamp = (response: ChecklistResponse) => {
+  const parsed = parseResponseDate(response.createdAt);
+  return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY;
+};
+
 export const downloadChecklistsZip = async (
   details: ChecklistPdfDetail[],
   options: ZipOptions = {},
@@ -280,19 +301,25 @@ export const downloadChecklistsZip = async (
     return;
   }
 
+  const sortedDetails = [...details].sort((a, b) => getResponseTimestamp(a.response) - getResponseTimestamp(b.response));
+
   const zip = new JSZip();
 
-  for (const detail of details) {
+  for (const detail of sortedDetails) {
     const doc = await buildChecklistPdf(detail);
     const pdfData = doc.output("arraybuffer");
     const filename = `${buildChecklistDocumentBaseName(detail)}.pdf`;
     zip.file(filename, pdfData);
   }
 
-  const baseName = buildChecklistDocumentBaseName(
-    details[0],
-    options.filename ?? `checklists-${details.length}-${formatResponseDate(details[0].response)}`,
-  );
+  const firstDetail = sortedDetails[0];
+  const lastDetail = sortedDetails[sortedDetails.length - 1];
+  const archiveLabel =
+    options.filename ??
+    (sortedDetails.length === 1
+      ? `checklist-${formatResponseTimestamp(firstDetail.response)}`
+      : `checklists-${formatResponseDate(firstDetail.response)}-a-${formatResponseDate(lastDetail.response)}`);
+  const baseName = sanitizeFilename(archiveLabel) || "checklists";
   const blob = await zip.generateAsync({ type: "blob" });
   triggerDownload(blob, `${baseName}.zip`);
 };

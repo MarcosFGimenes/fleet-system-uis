@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db } from "@/lib/firebase";
 import {
@@ -36,7 +37,7 @@ type PendingItem = {
   responsible: string;
   deadline?: string;
   updatedAt?: string;
-  photoUrl?: string;
+  photoUrls: string[];
   observation?: string;
   operatorNome?: string | null;
   operatorMatricula?: string;
@@ -129,6 +130,12 @@ export default function NonConformitiesAdminPage() {
           const treatment = treatmentByQuestion.get(answer.questionId);
           const statusValue = treatment?.status ?? "open";
           const recurrenceInfo = answer.recurrence;
+          const answerPhotoUrls =
+            answer.photoUrls?.length
+              ? answer.photoUrls
+              : answer.photoUrl
+              ? [answer.photoUrl]
+              : [];
 
           pendingItems.push({
             id: `${response.id}-${answer.questionId}`,
@@ -145,7 +152,7 @@ export default function NonConformitiesAdminPage() {
             responsible: treatment?.responsible ?? "",
             deadline: treatment?.deadline,
             updatedAt: treatment?.updatedAt,
-            photoUrl: answer.photoUrl,
+            photoUrls: answerPhotoUrls,
             observation: answer.observation,
             operatorNome: response.operatorNome ?? null,
             operatorMatricula: response.operatorMatricula,
@@ -382,15 +389,30 @@ export default function NonConformitiesAdminPage() {
                       Observações do operador: {item.observation}
                     </p>
                   )}
-                  {item.photoUrl && (
-                    <a
-                      href={item.photoUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs font-medium text-blue-600 underline"
-                    >
-                      Ver evidência
-                    </a>
+                  {item.photoUrls.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-gray-600">Evidências</p>
+                      <div className="flex flex-wrap gap-3">
+                        {item.photoUrls.map((url, photoIndex) => (
+                          <a
+                            key={`${item.id}-photo-${photoIndex}`}
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="group block h-32 w-32 overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+                          >
+                            <Image
+                              src={url}
+                              alt={`Evidência ${photoIndex + 1}`}
+                              width={128}
+                              height={128}
+                              unoptimized
+                              className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2">

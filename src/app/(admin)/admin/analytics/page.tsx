@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ChecklistResponse } from "@/types/checklist";
@@ -22,6 +22,12 @@ import {
 } from "recharts";
 
 const COLORS = ["#22c55e", "#ef4444", "#f59e0b", "#3b82f6", "#a855f7"];
+
+const PERIODICITY_UNITS = {
+  day: { singular: "dia", plural: "dias" },
+  week: { singular: "semana", plural: "semanas" },
+  month: { singular: "mês", plural: "meses" },
+} as const;
 
 type Kpis = {
   totalChecklists: number;
@@ -49,13 +55,62 @@ type BarPoint = {
   nc: number;
 };
 
+type PeriodicityComplianceItem = {
+  templateId: string;
+  templateName: string;
+  machineId: string;
+  machineName?: string;
+  lastSubmissionAt?: string;
+  windowDays: number;
+  unit: keyof typeof PERIODICITY_UNITS;
+  quantity: number;
+  anchor: "last_submission" | "calendar";
+  status: "compliant" | "non_compliant";
+};
+
+type PeriodicityComplianceResponse = {
+  generatedAt: string;
+  summary: {
+    totalTracked: number;
+    compliant: number;
+    nonCompliant: number;
+  };
+  items: PeriodicityComplianceItem[];
+};
+
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<ChecklistResponse[]>([]);
   const [machines, setMachines] = useState<Machine[]>([]);
+  const [periodicity, setPeriodicity] = useState<PeriodicityComplianceResponse | null>(null);
+  const [periodicityLoading, setPeriodicityLoading] = useState(false);
+  const [periodicityError, setPeriodicityError] = useState<string | null>(null);
 
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
   const machinesCol = useMemo(() => collection(db, "machines"), []);
+
+  const refreshPeriodicity = useCallback(async () => {
+    setPeriodicityLoading(true);
+    setPeriodicityError(null);
+    try {
+      const response = await fetch("/api/kpi/periodicity-compliance", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message = typeof payload?.error === "string" ? payload.error : "Falha ao carregar periodicidade.";
+        throw new Error(message);
+      }
+      const data = (await response.json()) as PeriodicityComplianceResponse;
+      setPeriodicity(data);
+    } catch (error) {
+      console.error("Failed to load periodicity compliance", error);
+      setPeriodicityError((error as Error).message ?? "Falha ao carregar periodicidade.");
+    } finally {
+      setPeriodicityLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -82,6 +137,17 @@ export default function AnalyticsPage() {
 
     load();
   }, [machinesCol, responsesCol]);
+
+  useEffect(() => {
+    refreshPeriodicity();
+  }, [refreshPeriodicity]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshPeriodicity();
+    }, 90_000);
+    return () => clearInterval(interval);
+  }, [refreshPeriodicity]);
 
   const kpis: Kpis = useMemo(() => {
     let totalAnswers = 0;
@@ -199,14 +265,130 @@ export default function AnalyticsPage() {
       .slice(0, 8);
   }, [rows, machines]);
 
+  const nonCompliantItems = useMemo(
+    () => periodicity?.items.filter((item) => item.status === "non_compliant") ?? [],
+    [periodicity?.items],
+  );
+
+  const trackedCount = periodicity?.summary.totalTracked ?? 0;
+
+  const renderRequirement = useCallback(
+    (item: { quantity: number; unit: keyof typeof PERIODICITY_UNITS }) => {
+      const unitLabel = PERIODICITY_UNITS[item.unit];
+      const plural = item.quantity > 1;
+      return `1 envio a cada ${item.quantity} ${plural ? unitLabel.plural : unitLabel.singular}`;
+    },
+    [],
+  );
+
+  const formatDatePtBr = useCallback((value?: string) => {
+    if (!value) return "Nunca";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Nunca";
+    return date.toLocaleString("pt-BR", { timeZone: "UTC" });
+  }, []);
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold">Indicadores</h1>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-[var(--muted)]">
           Visao geral de conformidades, inconformidades e tempos medios de solucao.
         </p>
       </header>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Periodicidade mínima</h2>
+          <button
+            type="button"
+            onClick={() => refreshPeriodicity()}
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-sm font-medium text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)] disabled:opacity-60"
+            disabled={periodicityLoading}
+          >
+            {periodicityLoading ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
+
+        {periodicityError && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {periodicityError}
+          </div>
+        )}
+
+        {periodicity && trackedCount === 0 && !periodicityError && (
+          <div className="rounded-md border border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)] shadow-sm">
+            Nenhuma exigência de periodicidade ativa.
+          </div>
+        )}
+
+        {periodicity && trackedCount > 0 && (
+          <div
+            className={`rounded-md border p-4 ${
+              periodicity.summary.nonCompliant > 0
+                ? "border-red-200 bg-red-50"
+                : "border-emerald-200 bg-emerald-50"
+            }`}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3
+                  className={`text-base font-semibold ${
+                    periodicity.summary.nonCompliant > 0 ? "text-red-700" : "text-emerald-700"
+                  }`}
+                >
+                  {periodicity.summary.nonCompliant > 0
+                    ? "Atenção: checklists fora da periodicidade mínima"
+                    : "Todos os itens estão dentro da periodicidade"}
+                </h3>
+                <p
+                  className={`text-sm ${
+                    periodicity.summary.nonCompliant > 0 ? "text-red-600" : "text-emerald-600"
+                  }`}
+                >
+                  {periodicity.summary.nonCompliant > 0
+                    ? `${periodicity.summary.nonCompliant} de ${trackedCount} itens estão atrasados.`
+                    : `${trackedCount} itens monitorados estão em conformidade.`}
+                </p>
+                <p className="mt-1 text-xs text-[var(--hint)]">
+                  Última verificação: {formatDatePtBr(periodicity.generatedAt)} (UTC)
+                </p>
+              </div>
+
+              {periodicity.summary.nonCompliant > 0 && (
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                  Fora da periodicidade
+                </span>
+              )}
+            </div>
+
+            {nonCompliantItems.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {nonCompliantItems.map((item) => (
+                  <div
+                    key={`${item.templateId}-${item.machineId}`}
+                    className="rounded-md border border-red-200 bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-red-700">{item.templateName}</p>
+                        <p className="text-xs text-red-600">{item.machineName ?? item.machineId}</p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                        Fora da periodicidade
+                      </span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs text-red-600">
+                      <p>Último envio: {formatDatePtBr(item.lastSubmissionAt)}</p>
+                      <p>Exigido: {renderRequirement(item)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Checklists" value={loading ? "-" : kpis.totalChecklists} />
@@ -286,7 +468,7 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-[var(--hint)]">
         Observacao: o tempo medio de reparacao considera o intervalo entre a primeira ocorrencia de NC e o
         primeiro OK subsequente para a mesma maquina, template e pergunta na janela carregada.
       </p>
