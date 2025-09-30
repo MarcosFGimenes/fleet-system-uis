@@ -5,8 +5,10 @@ import { createRoot } from "react-dom/client";
 import NonConformitiesOverviewPage from "@/app/(admin)/admin/non-conformities/page";
 
 const fetchMock = vi.fn();
+const pushMock = vi.fn();
+const replaceMock = vi.fn();
 
-global.fetch = fetchMock as unknown as typeof fetch;
+(globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
 beforeAll(() => {
   if (typeof globalThis.crypto === "undefined") {
@@ -17,7 +19,9 @@ beforeAll(() => {
 });
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
+  usePathname: () => "/admin/non-conformities",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("@/components/ui/Card", () => ({
@@ -33,8 +37,40 @@ vi.mock("@/components/ui/KpiTile", () => ({
 }));
 
 vi.mock("@/components/ui/DataTable", () => ({
-  default: ({ data, isLoading }: { data: any[]; isLoading: boolean }) => (
-    <div data-testid="data-table">{isLoading ? "loading" : data.map((item) => item.title ?? item.questionText ?? item.id).join(", ")}</div>
+  default: ({
+    data,
+    isLoading,
+    columns = [],
+    onRowClick,
+    filters,
+  }: {
+    data: any[];
+    isLoading: boolean;
+    columns?: { key: string; render?: (record: any) => React.ReactNode }[];
+    onRowClick?: (record: any) => void;
+    filters?: React.ReactNode;
+  }) => (
+    <div>
+      {filters}
+      <div data-testid="data-table">
+        {isLoading
+          ? "loading"
+          : data.map((record) => (
+              <div
+                key={record.id}
+                data-testid={`row-${record.id}`}
+                onClick={() => onRowClick?.(record)}
+              >
+                {columns.map((column) => (
+                  <div key={column.key} data-column={column.key}>
+                    {typeof column.render === "function" ? column.render(record) : null}
+                  </div>
+                ))}
+                <span data-testid={`row-label-${record.id}`}>{record.title ?? record.id}</span>
+              </div>
+            ))}
+      </div>
+    </div>
   ),
 }));
 
@@ -105,38 +141,67 @@ function renderPage() {
   };
 }
 
+const baseKpiPayload = {
+  openTotal: 0,
+  openBySeverity: {},
+  onTimePercentage: 0,
+  recurrence30d: 0,
+  avgContainmentHours: 0,
+  avgResolutionHours: 0,
+  series: { daily: [], weekly: [] },
+  rootCausePareto: [],
+  systemBreakdown: [],
+  severityBySystem: [],
+};
+
+const sampleNc = {
+  id: "nc-record-1",
+  title: "NC 1",
+  description: "Teste",
+  severity: "alta",
+  safetyRisk: true,
+  impactAvailability: false,
+  status: "aberta",
+  dueAt: "2025-10-01T16:04:15.201Z",
+  createdAt: "2025-09-29T16:04:15.201Z",
+  createdBy: { id: "user", matricula: "1", nome: "Usuário" },
+  linkedAsset: { id: "asset-1", tag: "MCH-1", modelo: "Modelo" },
+  linkedTemplateId: "template-1",
+  source: "checklist_question",
+  originChecklistResponseId: "resp-1",
+  originQuestionId: "q-1",
+  rootCause: "Falha",
+  actions: [],
+  recurrenceOfId: undefined,
+  telemetryRef: undefined,
+  yearMonth: "2025-09",
+  severityRank: 3,
+  systemCategory: "Sistema",
+};
+
 beforeEach(() => {
   fetchMock.mockReset();
+  pushMock.mockReset();
+  replaceMock.mockReset();
   window.localStorage.clear();
 });
 
 describe("NonConformitiesOverviewPage", () => {
-  it("renders loading state then data when the request succeeds", async () => {
-    fetchMock.mockImplementation((input: RequestInfo) => {
+  it("renders loading state then data when the request succeeds and allows row navigation", async () => {
+    fetchMock.mockImplementation((input: RequestInfo, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.url;
       if (url.includes("/api/kpi/nc")) {
-        return Promise.resolve(createMockResponse({ ok: true, status: 200, jsonBody: { openTotal: 0, openBySeverity: {}, onTimePercentage: 0, recurrence30d: 0, avgContainmentHours: 0, avgResolutionHours: 0, series: { daily: [], weekly: [] }, rootCausePareto: [], systemBreakdown: [], severityBySystem: [] } }));
+        return Promise.resolve(createMockResponse({ ok: true, status: 200, jsonBody: baseKpiPayload }));
+      }
+      if (init?.method === "PATCH") {
+        return Promise.resolve(createMockResponse({ ok: true, status: 200 }));
       }
       return Promise.resolve(
         createMockResponse({
           ok: true,
           status: 200,
           jsonBody: {
-            data: [
-              {
-                id: "nc::resp-1::q1",
-                title: "NC 1",
-                questionText: "NC 1",
-                status: "aberta",
-                createdAt: "2025-09-29T16:04:15.201Z",
-                createdBy: { id: "user", matricula: "1" },
-                linkedAsset: { id: "asset", tag: "machine-1" },
-                source: "checklist_question",
-                originChecklistResponseId: "resp-1",
-                yearMonth: "2025-09",
-                severityRank: 0,
-              },
-            ],
+            data: [sampleNc],
             page: 1,
             pageSize: 20,
             total: 1,
@@ -147,38 +212,35 @@ describe("NonConformitiesOverviewPage", () => {
     });
 
     const { container, unmount } = renderPage();
-    const dataTable = () => container.querySelector("[data-testid='data-table']")!;
-    expect(dataTable().textContent).toContain("loading");
+    const table = () => container.querySelector("[data-testid='data-table']")!;
+    expect(table().textContent).toContain("loading");
 
     await flushPromises();
     await flushPromises();
 
-    expect(dataTable().textContent).toContain("NC 1");
+    expect(table().textContent).toContain("NC 1");
+
+    const row = container.querySelector("[data-testid='row-nc-record-1']");
+    expect(row).toBeTruthy();
+
+    await act(async () => {
+      row?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(pushMock).toHaveBeenCalledWith("/admin/non-conformities/nc-record-1");
     unmount();
   });
 
   it("shows detailed error and retries the request", async () => {
     const responses = [
-      createMockResponse({ ok: true, status: 200, jsonBody: { openTotal: 0, openBySeverity: {}, onTimePercentage: 0, recurrence30d: 0, avgContainmentHours: 0, avgResolutionHours: 0, series: { daily: [], weekly: [] }, rootCausePareto: [], systemBreakdown: [], severityBySystem: [] } }),
+      createMockResponse({ ok: true, status: 200, jsonBody: baseKpiPayload }),
       createMockResponse({ ok: false, status: 500, jsonBody: { error: "Internal Server Error" } }),
       createMockResponse({
         ok: true,
         status: 200,
         jsonBody: {
           data: [
-            {
-              id: "nc::resp-2::q1",
-              title: "NC 2",
-              questionText: "NC 2",
-              status: "aberta",
-              createdAt: "2025-09-29T16:04:15.201Z",
-              createdBy: { id: "user", matricula: "1" },
-              linkedAsset: { id: "asset", tag: "machine-2" },
-              source: "checklist_question",
-              originChecklistResponseId: "resp-2",
-              yearMonth: "2025-09",
-              severityRank: 0,
-            },
+            { ...sampleNc, id: "nc-record-2", title: "NC 2", originChecklistResponseId: "resp-2" },
           ],
           page: 1,
           pageSize: 20,
@@ -200,9 +262,11 @@ describe("NonConformitiesOverviewPage", () => {
     await flushPromises();
 
     const alert = container.querySelector("[data-testid='alert']");
-    expect(alert?.textContent).toContain("Falha ao carregar não conformidades (status 500)");
+    expect(alert?.textContent).toContain("Não foi possível carregar as não conformidades.");
 
-    const retryButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Tentar novamente");
+    const retryButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Tentar novamente",
+    );
     expect(retryButton).toBeDefined();
 
     await act(async () => {
@@ -212,8 +276,65 @@ describe("NonConformitiesOverviewPage", () => {
     await flushPromises();
     await flushPromises();
 
-    const dataTable = container.querySelector("[data-testid='data-table']");
-    expect(dataTable?.textContent).toContain("NC 2");
+    const table = container.querySelector("[data-testid='data-table']");
+    expect(table?.textContent).toContain("NC 2");
+    unmount();
+  });
+
+  it("applies bulk actions using existing NC identifiers", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    fetchMock.mockImplementation((input: RequestInfo, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.url;
+      calls.push({ url, init });
+      if (url.includes("/api/kpi/nc")) {
+        return Promise.resolve(createMockResponse({ ok: true, status: 200, jsonBody: baseKpiPayload }));
+      }
+      if (url.includes("/api/nc/") && init?.method === "PATCH") {
+        return Promise.resolve(createMockResponse({ ok: true, status: 200 }));
+      }
+      return Promise.resolve(
+        createMockResponse({
+          ok: true,
+          status: 200,
+          jsonBody: {
+            data: [sampleNc],
+            page: 1,
+            pageSize: 20,
+            total: 1,
+            hasMore: false,
+          },
+        }),
+      );
+    });
+
+    const { container, unmount } = renderPage();
+
+    await flushPromises();
+    await flushPromises();
+
+    const checkbox = container.querySelector("input[type='checkbox']") as HTMLInputElement | null;
+    expect(checkbox).toBeTruthy();
+
+    await act(async () => {
+      checkbox?.click();
+    });
+
+    await flushPromises();
+
+    const bulkButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Marcar em execução",
+    );
+    expect(bulkButton).toBeDefined();
+
+    await act(async () => {
+      bulkButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    await flushPromises();
+
+    const patchCall = calls.find((call) => call.url.includes("/api/nc/") && call.init?.method === "PATCH");
+    expect(patchCall).toBeDefined();
+    expect(patchCall?.url).toBe("/api/nc/nc-record-1");
     unmount();
   });
 });
