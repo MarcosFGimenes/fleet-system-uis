@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Timestamp } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 import {
   addDoc,

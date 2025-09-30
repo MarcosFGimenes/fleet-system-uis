@@ -45,6 +45,8 @@ type ChecklistTemplateDoc = {
   questions?: TemplateQuestion[];
 };
 
+import type { NcStatus, Severity } from "@/types/nonconformity";
+
 type NormalizedNc = {
   id: string;
   checklistResponseId: string;
@@ -54,6 +56,8 @@ type NormalizedNc = {
   photoUrls: string[];
   response: "nc";
   evidenceStatus: "ok" | "missing_required_photo";
+  status: NcStatus;
+  severity: Severity;
   machineId: string;
   templateId: string;
   templateTitle: string;
@@ -81,36 +85,14 @@ function isMissingIndexError(error: unknown): boolean {
 
 const querySchema = z
   .object({
+    status: z.string().optional(),
+    severity: z.string().optional(),
+    assetId: z.string().optional(),
+    dateFrom: z.string().optional(),
+    dateTo: z.string().optional(),
+    q: z.string().optional(),
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z
-      .coerce.number()
-      .int()
-      .refine((value) => [10, 20, 50, 100].includes(value), {
-        message: "pageSize must be one of 10, 20, 50 or 100",
-      })
-      .default(20),
-    machineId: z.string().trim().min(1).optional(),
-    templateId: z.string().trim().min(1).optional(),
-    operatorMatricula: z.string().trim().min(1).optional(),
-    search: z.string().trim().min(1).optional(),
-    from: z
-      .string()
-      .trim()
-      .min(1)
-      .transform((value) => new Date(value))
-      .refine((date) => !Number.isNaN(date.getTime()), {
-        message: "from must be a valid ISO date",
-      })
-      .optional(),
-    to: z
-      .string()
-      .trim()
-      .min(1)
-      .transform((value) => new Date(value))
-      .refine((date) => !Number.isNaN(date.getTime()), {
-        message: "to must be a valid ISO date",
-      })
-      .optional(),
+    pageSize: z.coerce.number().int().min(1).default(20),
   })
   .strict();
 
@@ -191,6 +173,11 @@ function normalizeNc(
 
   const questionText = sanitizeString(question?.text) ?? "(pergunta não encontrada)";
 
+  // Assuming default status and severity if not explicitly available in ChecklistResponseDoc
+  // In a real scenario, these might be derived from the checklist response or question itself.
+  const status: NcStatus = "aberta"; // Default status
+  const severity: Severity = "baixa"; // Default severity
+
   return {
     id: `nc::${responseId}::${answer.questionId}`,
     checklistResponseId: responseId,
@@ -200,6 +187,8 @@ function normalizeNc(
     photoUrls,
     response: "nc",
     evidenceStatus,
+    status,
+    severity,
     machineId: sanitizeString(response.machineId) ?? "",
     templateId,
     templateTitle: sanitizeString(response.templateTitle) ?? questionText,
@@ -234,14 +223,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { page, pageSize, machineId, templateId, operatorMatricula, search, from, to } = parsed.data;
+  const { page, pageSize, status, severity, assetId, dateFrom, dateTo, q } = parsed.data;
 
-  if (from && to && from.getTime() > to.getTime()) {
+  const parsedDateFrom = dateFrom ? new Date(dateFrom) : undefined;
+  const parsedDateTo = dateTo ? new Date(dateTo) : undefined;
+
+  if (parsedDateFrom && parsedDateTo && parsedDateFrom.getTime() > parsedDateTo.getTime()) {
     return NextResponse.json(
       {
         error: "Bad Request",
         details: {
-          formErrors: ["from must be before to"],
+          formErrors: ["dateFrom must be before dateTo"],
           fieldErrors: {},
         },
       },
@@ -253,23 +245,18 @@ export async function GET(request: NextRequest) {
     const db = getAdminDb();
     let baseQuery = db.collection("checklistResponses") as Query<DocumentData>;
 
-    if (machineId) {
-      baseQuery = baseQuery.where("machineId", "==", machineId);
-    }
-    if (templateId) {
-      baseQuery = baseQuery.where("templateId", "==", templateId);
-    }
-    if (operatorMatricula) {
-      baseQuery = baseQuery.where("operatorMatricula", "==", operatorMatricula);
+    // Apply filters from the new query schema
+    if (assetId) {
+      baseQuery = baseQuery.where("machineId", "==", assetId);
     }
 
     let timestampQuery = baseQuery.orderBy("createdAtTs", "desc");
 
-    if (from) {
-      timestampQuery = timestampQuery.where("createdAtTs", ">=", Timestamp.fromDate(from));
+    if (parsedDateFrom) {
+      timestampQuery = timestampQuery.where("createdAtTs", ">=", Timestamp.fromDate(parsedDateFrom));
     }
-    if (to) {
-      timestampQuery = timestampQuery.where("createdAtTs", "<=", Timestamp.fromDate(to));
+    if (parsedDateTo) {
+      timestampQuery = timestampQuery.where("createdAtTs", "<=", Timestamp.fromDate(parsedDateTo));
     }
 
     const fetchLimit = Math.min(
@@ -309,7 +296,7 @@ export async function GET(request: NextRequest) {
       }));
     }
 
-    if ((from || to) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
+    if ((parsedDateFrom || parsedDateTo) && (!usedIndexFallback || responseDocs.length < fetchLimit)) {
 
       // Some legacy responses may only have string-based createdAt values.
       // Fetch an extra window without timestamp filters and rely on in-memory filtering.
@@ -343,7 +330,7 @@ export async function GET(request: NextRequest) {
       const { iso: createdAtISO, date: createdAtDate } = deriveCreatedAt(data, createTime);
       if (!createdAtISO) continue;
 
-      if (!withinDateRange(createdAtDate, from, to)) {
+      if (!withinDateRange(createdAtDate, parsedDateFrom, parsedDateTo)) {
         continue;
       }
 
@@ -379,8 +366,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const searchTerm = search?.toLowerCase() ?? null;
+    const searchTerm = q?.toLowerCase() ?? null;
     const filtered = items.filter((item) => {
+      if (status && item.status !== status) return false;
+      if (severity && item.severity !== severity) return false;
       if (!searchTerm) return true;
       const haystack = [item.questionText, item.machineId].map((value) => value.toLowerCase());
       return haystack.some((value) => value.includes(searchTerm));
@@ -398,7 +387,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: paginated, page, pageSize, total, hasMore });
   } catch (error) {
-    console.error("GET /api/nc failed", error);
+    console.error("GET /api/nc failed", error, JSON.stringify(error, Object.getOwnPropertyNames(error)));
     const requestId = randomUUID();
     return NextResponse.json(
       { error: "Internal Server Error", requestId },

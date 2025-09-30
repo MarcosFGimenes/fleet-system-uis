@@ -1,1042 +1,504 @@
 "use client";
 
-import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ReadonlyURLSearchParams } from "next/navigation";
-import Card from "@/components/ui/Card";
-import KpiTile from "@/components/ui/KpiTile";
-import DataTable from "@/components/ui/DataTable";
-import Alert from "@/components/ui/Alert";
-import type { NcAction, NcStatus, NonConformity } from "@/types/nonconformity";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { db } from "@/lib/firebase";
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+  ChecklistRecurrenceStatus,
+  ChecklistNonConformityTreatment,
+  ChecklistResponse,
+  ChecklistTemplate,
+  NonConformityStatus,
+} from "@/types/checklist";
+import { Machine } from "@/types/machine";
+import {
+  collection,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  updateDoc,
+} from "firebase/firestore";
 
-const STORAGE_KEY = "admin-nc-filters";
-const MAX_PAGE_SIZE = 100;
+type StatusFilter = "pending" | "all" | NonConformityStatus;
 
-const STATUS_OPTIONS: { value: "" | NcStatus; label: string }[] = [
-  { value: "", label: "Todos" },
-  { value: "aberta", label: "Abertas" },
-  { value: "em_execucao", label: "Em execução" },
-  { value: "aguardando_peca", label: "Aguardando peça" },
-  { value: "bloqueada", label: "Bloqueadas" },
-  { value: "resolvida", label: "Resolvidas" },
+type PendingItem = {
+  id: string;
+  responseId: string;
+  questionId: string;
+  createdAt: string;
+  machineId: string;
+  machine?: Machine;
+  template?: ChecklistTemplate;
+  questionText: string;
+  status: NonConformityStatus;
+  draftStatus: NonConformityStatus;
+  summary: string;
+  responsible: string;
+  deadline?: string;
+  updatedAt?: string;
+  photoUrl?: string;
+  observation?: string;
+  operatorNome?: string | null;
+  operatorMatricula?: string;
+  isRecurrence: boolean;
+  recurrenceStatus?: ChecklistRecurrenceStatus;
+};
+
+type FeedbackState = {
+  type: "success" | "error";
+  message: string;
+};
+
+const statusLabel: Record<NonConformityStatus, string> = {
+  open: "Pendente",
+  in_progress: "Em andamento",
+  resolved: "Resolvido",
+};
+
+const statusOptions: { value: StatusFilter; label: string }[] = [
+  { value: "pending", label: "Somente pendentes" },
+  { value: "all", label: "Todos" },
+  { value: "open", label: "Apenas abertos" },
+  { value: "in_progress", label: "Em andamento" },
+  { value: "resolved", label: "Resolvidos" },
 ];
 
-const SEVERITY_OPTIONS = [
-  { value: "", label: "Todas severidades" },
-  { value: "alta", label: "Alta" },
-  { value: "media", label: "Média" },
-  { value: "baixa", label: "Baixa" },
-];
+const statusOrder: NonConformityStatus[] = ["open", "in_progress", "resolved"];
 
-const SEVERITY_STYLES: Record<string, string> = {
-  alta: "bg-red-100 text-red-700 border border-red-200",
-  media: "bg-amber-100 text-amber-700 border border-amber-200",
-  baixa: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-};
+export default function NonConformitiesAdminPage() {
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [items, setItems] = useState<PendingItem[]>([]);
+  const [responsesMap, setResponsesMap] = useState<Record<string, ChecklistResponse>>({});
+  const [loading, setLoading] = useState(true);
+  const [savingItemId, setSavingItemId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [machineFilter, setMachineFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
 
-const STATUS_LABEL: Record<NcStatus, string> = {
-  aberta: "Aberta",
-  em_execucao: "Em execução",
-  aguardando_peca: "Aguardando peça",
-  bloqueada: "Bloqueada",
-  resolvida: "Resolvida",
-};
+  const machinesCol = useMemo(() => collection(db, "machines"), []);
+  const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
+  const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
 
-const LONG_DATE_FORMATTER = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setFeedback(null);
 
-const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
-
-type Filters = {
-  status: "" | NcStatus;
-  severity: "" | "alta" | "media" | "baixa";
-  assetId: string;
-  dateFrom?: string;
-  dateTo?: string;
-  q: string;
-};
-
-type KpiResponse = {
-  openTotal: number;
-  openBySeverity: Record<string, number>;
-  onTimePercentage: number;
-  recurrence30d: number;
-  avgContainmentHours: number;
-  avgResolutionHours: number;
-  series: {
-    daily: { period: string; opened: number; closed: number }[];
-    weekly: { period: string; opened: number; closed: number }[];
-  };
-  rootCausePareto: { rootCause: string; value: number }[];
-  systemBreakdown: { system: string; value: number }[];
-  severityBySystem: { system: string; alta: number; media: number; baixa: number }[];
-};
-
-const DEFAULT_FILTERS: Filters = {
-  status: "",
-  severity: "",
-  assetId: "",
-  dateFrom: undefined,
-  dateTo: undefined,
-  q: "",
-};
-
-type ParsedQuery = {
-  filters: Partial<Filters>;
-  page?: number;
-  pageSize?: number;
-};
-
-function parseQueryParams(searchParams: URLSearchParams | ReadonlyURLSearchParams): ParsedQuery {
-  const parsedFilters: Partial<Filters> = {};
-
-  const status = searchParams.get("status");
-  if (status !== null && STATUS_OPTIONS.some((option) => option.value === status)) {
-    parsedFilters.status = status as Filters["status"];
-  }
-
-  const severity = searchParams.get("severity");
-  if (severity !== null && SEVERITY_OPTIONS.some((option) => option.value === severity)) {
-    parsedFilters.severity = severity as Filters["severity"];
-  }
-
-  const assetId = searchParams.get("assetId");
-  if (assetId !== null) parsedFilters.assetId = assetId;
-
-  const dateFrom = searchParams.get("dateFrom");
-  if (dateFrom || dateFrom === "") {
-    parsedFilters.dateFrom = dateFrom || undefined;
-  }
-
-  const dateTo = searchParams.get("dateTo");
-  if (dateTo || dateTo === "") {
-    parsedFilters.dateTo = dateTo || undefined;
-  }
-
-  const q = searchParams.get("q");
-  if (q !== null) parsedFilters.q = q;
-
-  const pageParam = Number.parseInt(searchParams.get("page") ?? "", 10);
-  const parsedPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : undefined;
-
-  const pageSizeParam = Number.parseInt(searchParams.get("pageSize") ?? "", 10);
-  const parsedPageSize =
-    Number.isFinite(pageSizeParam) && pageSizeParam > 0
-      ? Math.min(pageSizeParam, MAX_PAGE_SIZE)
-      : undefined;
-
-  return {
-    filters: parsedFilters,
-    page: parsedPage,
-    pageSize: parsedPageSize,
-  };
-}
-
-function areFiltersEqual(a: Filters, b: Filters): boolean {
-  return (
-    a.status === b.status &&
-    a.severity === b.severity &&
-    a.assetId === b.assetId &&
-    a.dateFrom === b.dateFrom &&
-    a.dateTo === b.dateTo &&
-    a.q === b.q
-  );
-}
-
-function buildOwnerAction(record: NonConformity, ownerName: string): NcAction[] {
-  const normalizedOwner = ownerName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .slice(0, 32) || "responsavel";
-
-  const clonedActions = [...(record.actions ?? [])];
-  const corrective = clonedActions.find((action) => action.type === "corretiva");
-
-  if (corrective) {
-    corrective.owner = { id: normalizedOwner, nome: ownerName };
-    corrective.startedAt = corrective.startedAt ?? new Date().toISOString();
-    return clonedActions;
-  }
-
-  clonedActions.unshift({
-    id: crypto.randomUUID(),
-    type: "corretiva",
-    description: "Responsável definido via painel administrador",
-    owner: { id: normalizedOwner, nome: ownerName },
-    startedAt: new Date().toISOString(),
-  });
-
-  return clonedActions;
-}
-
-async function extractErrorDetails(response: Response): Promise<string> {
-  let bodySnippet = "";
-  try {
-    const data = await response.clone().json();
-    bodySnippet = typeof data === "string" ? data : JSON.stringify(data);
-  } catch {
     try {
-      bodySnippet = await response.clone().text();
-    } catch {
-      bodySnippet = "";
-    }
-  }
+      const [machinesSnap, templatesSnap, responsesSnap] = await Promise.all([
+        getDocs(machinesCol),
+        getDocs(templatesCol),
+        getDocs(query(responsesCol, orderBy("createdAt", "desc"))),
+      ]);
 
-  const normalized = bodySnippet.replace(/\s+/g, " ").trim().slice(0, 800);
-  return `Status ${response.status}${normalized ? ` — ${normalized}` : ""}`;
-}
+      const machineList = machinesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<Machine, "id">;
+        return { id: docSnap.id, ...data } satisfies Machine;
+      });
 
-function isOverdue(record: NonConformity): boolean {
-  if (!record.dueAt || record.status === "resolvida") {
-    return false;
-  }
-  return new Date(record.dueAt).getTime() < Date.now();
-}
+      const templateList = templatesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<ChecklistTemplate, "id">;
+        return { id: docSnap.id, ...data } satisfies ChecklistTemplate;
+      });
 
-function getCorrectiveOwner(record: NonConformity): string | undefined {
-  const action = record.actions?.find((item) => item.type === "corretiva" && item.owner);
-  return action?.owner?.nome ?? action?.owner?.id;
-}
+      const machineById = new Map(machineList.map((machine) => [machine.id, machine]));
+      const templateById = new Map(templateList.map((template) => [template.id, template]));
 
-async function patchNc(id: string, body: Record<string, unknown>) {
-  const response = await fetch(`/api/nc/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, actor: { id: "admin-ui", nome: "Painel Admin" } }),
-  });
+      const responsesList = responsesSnap.docs.map((docSnap) => {
+        const data = docSnap.data() as Omit<ChecklistResponse, "id">;
+        return { id: docSnap.id, ...data } satisfies ChecklistResponse;
+      });
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Falha ao atualizar NC");
-  }
-}
+      const nextResponsesMap: Record<string, ChecklistResponse> = {};
+      const pendingItems: PendingItem[] = [];
 
-function NonConformitiesOverviewContent() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [records, setRecords] = useState<NonConformity[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [errorDetails, setErrorDetails] = useState<string | null>(null);
-  const [showErrorDetails, setShowErrorDetails] = useState(false);
-  const [refreshToken, setRefreshToken] = useState(0);
-  const [massBusy, setMassBusy] = useState(false);
-  const [massMessage, setMassMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [kpis, setKpis] = useState<KpiResponse | null>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const latestRequestIdRef = useRef<string | null>(null);
-  const hydratedRef = useRef(false);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+      for (const response of responsesList) {
+        nextResponsesMap[response.id] = response;
+        const template = templateById.get(response.templateId);
+        const questionTextById = new Map(
+          (template?.questions ?? []).map((question) => [question.id, question.text]),
+        );
+        const treatmentByQuestion = new Map(
+          (response.nonConformityTreatments ?? []).map((treatment) => [treatment.questionId, treatment]),
+        );
 
-  const selectedRecords = useMemo(
-    () => records.filter((record) => selectedIds.includes(record.id)),
-    [records, selectedIds],
-  );
+        for (const answer of response.answers ?? []) {
+          if (answer.response !== "nc") {
+            continue;
+          }
 
-  const kpiOpenTotal = typeof kpis?.openTotal === "number" ? kpis.openTotal : 0;
-  const kpiOnTime = typeof kpis?.onTimePercentage === "number" ? `${kpis.onTimePercentage.toFixed(1)}%` : "—";
-  const kpiRecurrence = typeof kpis?.recurrence30d === "number" ? `${kpis.recurrence30d.toFixed(1)}%` : "—";
-  const kpiResolution = typeof kpis?.avgResolutionHours === "number" ? `${kpis.avgResolutionHours.toFixed(1)} h` : "—";
-  const kpiContainment =
-    typeof kpis?.avgContainmentHours === "number" ? `${kpis.avgContainmentHours.toFixed(1)} h` : "—";
-  const kpiDailySeries = useMemo(
-    () => {
-      const daily = kpis?.series?.daily;
-      return Array.isArray(daily) ? daily : [];
-    },
-    [kpis],
-  );
-  const kpiPareto = useMemo(() => (Array.isArray(kpis?.rootCausePareto) ? kpis.rootCausePareto : []), [kpis]);
-  const kpiSeverityBySystem = useMemo(
-    () => (Array.isArray(kpis?.severityBySystem) ? kpis.severityBySystem : []),
-    [kpis],
-  );
-  const kpiOpenBySeverity = useMemo(() => kpis?.openBySeverity ?? {}, [kpis]);
+          const treatment = treatmentByQuestion.get(answer.questionId);
+          const statusValue = treatment?.status ?? "open";
+          const recurrenceInfo = answer.recurrence;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const parsedQuery = parseQueryParams(searchParams);
-
-    if (!hydratedRef.current) {
-      let storedFilters: Partial<Filters> = {};
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        try {
-          storedFilters = JSON.parse(stored) as Partial<Filters>;
-        } catch (err) {
-          console.warn("Não foi possível restaurar filtros salvos", err);
+          pendingItems.push({
+            id: `${response.id}-${answer.questionId}`,
+            responseId: response.id,
+            questionId: answer.questionId,
+            createdAt: response.createdAt,
+            machineId: response.machineId,
+            machine: machineById.get(response.machineId),
+            template,
+            questionText: questionTextById.get(answer.questionId) ?? answer.questionId,
+            status: statusValue,
+            draftStatus: statusValue,
+            summary: treatment?.summary ?? "",
+            responsible: treatment?.responsible ?? "",
+            deadline: treatment?.deadline,
+            updatedAt: treatment?.updatedAt,
+            photoUrl: answer.photoUrl,
+            observation: answer.observation,
+            operatorNome: response.operatorNome ?? null,
+            operatorMatricula: response.operatorMatricula,
+            isRecurrence: Boolean(recurrenceInfo),
+            recurrenceStatus: recurrenceInfo?.status,
+          });
         }
       }
 
-      const resolvedFilters: Filters = {
-        ...DEFAULT_FILTERS,
-        ...storedFilters,
-        ...parsedQuery.filters,
-      };
+      pendingItems.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
 
-      setFilters(resolvedFilters);
-      setPage(parsedQuery.page ?? 1);
-      setPageSize(parsedQuery.pageSize ?? 20);
-      setDebouncedQuery(resolvedFilters.q ?? "");
-      hydratedRef.current = true;
+      setMachines(machineList);
+      setItems(pendingItems);
+      setResponsesMap(nextResponsesMap);
+    } catch (error) {
+      console.error("Erro ao carregar não conformidades", error);
+      setFeedback({
+        type: "error",
+        message: "Não foi possível carregar as não conformidades. Tente novamente.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [machinesCol, responsesCol, templatesCol]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      if (machineFilter !== "all" && item.machineId !== machineFilter) {
+        return false;
+      }
+
+      if (statusFilter === "pending") {
+        return item.status === "open" || item.status === "in_progress";
+      }
+
+      if (statusFilter === "all") {
+        return true;
+      }
+
+      return item.status === statusFilter;
+    });
+  }, [items, machineFilter, statusFilter]);
+
+  const updateItemField = (id: string, patch: Partial<PendingItem>) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+    setFeedback(null);
+  };
+
+  const handleSaveItem = async (itemId: string) => {
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item) {
       return;
     }
 
-    const nextFilters: Filters = { ...DEFAULT_FILTERS, ...parsedQuery.filters };
-    let filtersChanged = false;
-    setFilters((prev) => {
-      if (areFiltersEqual(prev, nextFilters)) {
-        return prev;
-      }
-      filtersChanged = true;
-      return nextFilters;
-    });
-
-    if (filtersChanged) {
-      setDebouncedQuery(nextFilters.q ?? "");
+    const response = responsesMap[item.responseId];
+    if (!response) {
+      alert("Checklist não encontrado para atualizar a tratativa.");
+      return;
     }
 
-    if (parsedQuery.page !== undefined) {
-      setPage((prev) => (prev === parsedQuery.page ? prev : parsedQuery.page!));
-    } else {
-      setPage((prev) => (prev === 1 ? prev : 1));
-    }
+    setSavingItemId(itemId);
+    setFeedback(null);
 
-    if (parsedQuery.pageSize !== undefined) {
-      setPageSize((prev) => (prev === parsedQuery.pageSize ? prev : parsedQuery.pageSize!));
-    } else {
-      setPageSize((prev) => (prev === 20 ? prev : 20));
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !hydratedRef.current) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
-  }, [filters]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const handle = window.setTimeout(() => {
-      setDebouncedQuery(filters.q.trim());
-    }, 400);
-
-    return () => {
-      window.clearTimeout(handle);
-    };
-  }, [filters.q]);
-
-  const fetchKpis = useCallback(async () => {
     try {
-      const response = await fetch("/api/kpi/nc");
-      if (!response.ok) {
-        throw new Error(`Falha ao carregar KPIs (status ${response.status})`);
-      }
-      const payload = (await response.json()) as KpiResponse;
-      setKpis(payload);
-    } catch (err) {
-      console.error(err);
+          const summaryValue = item.summary.trim();
+          const responsibleValue = item.responsible.trim();
+          const updatedTreatment: ChecklistNonConformityTreatment = {
+            questionId: item.questionId,
+            status: item.draftStatus,
+            summary: summaryValue === "" ? undefined : summaryValue,
+            responsible: responsibleValue === "" ? undefined : responsibleValue,
+            deadline: item.deadline || undefined,
+            updatedAt: new Date().toISOString(),
+          };
+
+      const existingTreatments = response.nonConformityTreatments ?? [];
+      const nextTreatments = [
+        ...existingTreatments.filter((treatment) => treatment.questionId !== item.questionId),
+        updatedTreatment,
+      ];
+
+      await updateDoc(doc(db, "checklistResponses", item.responseId), {
+        nonConformityTreatments: nextTreatments,
+      });
+
+      setResponsesMap((prev) => ({
+        ...prev,
+        [item.responseId]: { ...response, nonConformityTreatments: nextTreatments },
+      }));
+
+      setItems((prev) =>
+        prev.map((current) =>
+          current.id === item.id
+            ? {
+                ...current,
+                summary: summaryValue,
+                responsible: responsibleValue,
+                deadline: item.deadline,
+                status: item.draftStatus,
+                draftStatus: item.draftStatus,
+                updatedAt: updatedTreatment.updatedAt,
+              }
+            : current,
+        ),
+      );
+
+      setFeedback({ type: "success", message: "Tratativa atualizada com sucesso." });
+    } catch (error) {
+      console.error("Erro ao salvar tratativa", error);
+      setFeedback({
+        type: "error",
+        message: "Não foi possível salvar a tratativa. Tente novamente.",
+      });
+    } finally {
+      setSavingItemId(null);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchKpis();
-  }, [fetchKpis]);
-
-  const applyFilterPatch = useCallback((patch: Partial<Filters>, options: { resetPage?: boolean } = {}) => {
-    const { resetPage = true } = options;
-    let changed = false;
-    setFilters((prev) => {
-      const next = { ...prev, ...patch } as Filters;
-      if (areFiltersEqual(prev, next)) {
-        return prev;
-      }
-      changed = true;
-      return next;
-    });
-
-    if (changed && resetPage) {
-      setPage(1);
-    }
-  }, []);
-
-  const { status, severity, assetId, dateFrom, dateTo } = filters;
-
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-
-    const controller = new AbortController();
-    controllerRef.current?.abort();
-    controllerRef.current = controller;
-
-    const requestId =
-      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : String(Date.now());
-
-    latestRequestIdRef.current = requestId;
-
-    setLoading(true);
-    setError(null);
-    setErrorDetails(null);
-    setShowErrorDetails(false);
-
-    const params = new URLSearchParams();
-    if (status) params.set("status", status);
-    if (severity) params.set("severity", severity);
-    if (assetId) params.set("assetId", assetId);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    if (debouncedQuery) params.set("q", debouncedQuery);
-    params.set("page", String(page));
-    params.set("pageSize", String(pageSize));
-
-    const url = `/api/nc?${params.toString()}`;
-    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
-
-    (async () => {
-      try {
-        const response = await fetch(url, {
-          signal: controller.signal,
-          headers: { "x-request-id": requestId },
-        });
-
-        if (latestRequestIdRef.current !== requestId) return;
-
-        if (!response.ok) {
-          const details = await extractErrorDetails(response);
-          console.error(`Falha ao carregar não conformidades: ${details}`);
-          setRecords([]);
-          setTotal(0);
-          setSelectedIds([]);
-          setError("Não foi possível carregar as não conformidades.");
-          setErrorDetails(details);
-          setShowErrorDetails(false);
-          return;
-        }
-
-        let payload: unknown = null;
-        try {
-          payload = await response.json();
-        } catch (jsonError) {
-          console.error(jsonError);
-          setRecords([]);
-          setTotal(0);
-          setSelectedIds([]);
-          setError("Não foi possível carregar as não conformidades.");
-          setErrorDetails(`Status ${response.status} — Resposta inválida do servidor.`);
-          setShowErrorDetails(false);
-          return;
-        }
-
-        if (latestRequestIdRef.current !== requestId) return;
-
-        const data = Array.isArray((payload as { data?: NonConformity[] })?.data)
-          ? ((payload as { data: NonConformity[] }).data ?? [])
-          : null;
-
-        if (!data) {
-          let serialized = "";
-          try {
-            serialized = JSON.stringify(payload);
-          } catch {
-            serialized = String(payload);
-          }
-          setRecords([]);
-          setTotal(0);
-          setSelectedIds([]);
-          setError("Não foi possível carregar as não conformidades.");
-          setErrorDetails(`Status ${response.status} — Resposta inválida: ${serialized.slice(0, 800)}`);
-          setShowErrorDetails(false);
-          return;
-        }
-
-        const totalValue =
-          typeof (payload as { total?: number })?.total === "number"
-            ? (payload as { total: number }).total
-            : data.length;
-
-        setRecords(data);
-        setTotal(totalValue);
-        setSelectedIds((prev) => prev.filter((id) => data.some((item) => item.id === id)));
-        setError(null);
-        setErrorDetails(null);
-        setShowErrorDetails(false);
-      } catch (err) {
-        if ((err as Error)?.name === "AbortError") return;
-        if (latestRequestIdRef.current !== requestId) return;
-        console.error(err);
-        setRecords([]);
-        setTotal(0);
-        setSelectedIds([]);
-        setError("Não foi possível carregar as não conformidades.");
-        const detail = err instanceof Error ? err.message : String(err);
-        setErrorDetails(detail.slice(0, 800));
-        setShowErrorDetails(false);
-      } finally {
-        window.clearTimeout(timeoutId);
-        if (latestRequestIdRef.current === requestId) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timeoutId);
-      if (latestRequestIdRef.current === requestId) {
-        latestRequestIdRef.current = null;
-      }
-    };
-  }, [assetId, dateFrom, dateTo, debouncedQuery, page, pageSize, refreshToken, severity, status]);
-
-  useEffect(() => {
-    if (!hydratedRef.current) return;
-    if (typeof window === "undefined") return;
-
-    const params = new URLSearchParams();
-    if (filters.status) params.set("status", filters.status);
-    if (filters.severity) params.set("severity", filters.severity);
-    if (filters.assetId) params.set("assetId", filters.assetId);
-    if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
-    if (filters.dateTo) params.set("dateTo", filters.dateTo);
-    if (filters.q) params.set("q", filters.q);
-    params.set("page", String(page));
-    params.set("pageSize", String(pageSize));
-
-    const nextSearch = params.toString();
-    const currentSearch = window.location.search.replace(/^[?]/, "");
-
-    if (currentSearch === nextSearch) return;
-
-    const nextUrl = nextSearch ? `${pathname}?${nextSearch}` : pathname;
-    router.replace(nextUrl, { scroll: false });
-  }, [filters.assetId, filters.dateFrom, filters.dateTo, filters.q, filters.severity, filters.status, page, pageSize, pathname, router]);
-
-  const handleRetry = useCallback(() => {
-    controllerRef.current?.abort();
-    setError(null);
-    setErrorDetails(null);
-    setShowErrorDetails(false);
-    setRefreshToken((prev) => prev + 1);
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, []);
-
-  const executeMassUpdate = useCallback(
-    async (updater: (record: NonConformity) => Promise<void>) => {
-      if (!selectedRecords.length) {
-        setMassMessage({ type: "error", text: "Selecione ao menos uma NC." });
-        return;
-      }
-
-      setMassBusy(true);
-      setMassMessage(null);
-      try {
-        for (const record of selectedRecords) {
-          await updater(record);
-        }
-        setMassMessage({ type: "success", text: "Atualização aplicada com sucesso." });
-        setSelectedIds([]);
-        setRefreshToken((prev) => prev + 1);
-        fetchKpis();
-      } catch (error) {
-        console.error(error);
-        setMassMessage({ type: "error", text: "Falha ao aplicar a ação em massa." });
-      } finally {
-        setMassBusy(false);
-      }
-    },
-    [fetchKpis, selectedRecords],
-  );
-
-  const applyMassStatus = useCallback(
-    (status: NcStatus) =>
-      executeMassUpdate(async (record) => {
-        await patchNc(record.id, { status });
-      }),
-    [executeMassUpdate],
-  );
-
-  const applyMassDueAt = useCallback(
-    (dueAt: string) =>
-      executeMassUpdate(async (record) => {
-        await patchNc(record.id, { dueAt });
-      }),
-    [executeMassUpdate],
-  );
-
-  const applyMassOwner = useCallback(
-    (owner: string) =>
-      executeMassUpdate(async (record) => {
-        const actions = buildOwnerAction(record, owner);
-        await patchNc(record.id, { actions });
-      }),
-    [executeMassUpdate],
-  );
-
-  const handlePageChange = useCallback((nextPage: number) => {
-    setPage(Math.max(1, nextPage));
-  }, []);
-
-  const handlePageSizeChange = useCallback((nextSize: number) => {
-    setPageSize(Math.min(nextSize, MAX_PAGE_SIZE));
-    setPage(1);
-  }, []);
-
-  const handleSelectToggle = useCallback((id: string, checked: boolean) => {
-    setSelectedIds((prev) => {
-      if (checked) {
-        return Array.from(new Set([...prev, id]));
-      }
-      return prev.filter((item) => item !== id);
-    });
-  }, []);
-
-  const filterControls = useMemo(
-    () => (
-      <div className="flex w-full flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={filters.status}
-            onChange={(event) => {
-              applyFilterPatch({ status: event.target.value as Filters["status"] });
-            }}
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          >
-            {STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filters.severity}
-            onChange={(event) => {
-              applyFilterPatch({ severity: event.target.value as Filters["severity"] });
-            }}
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          >
-            {SEVERITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <input
-            value={filters.assetId}
-            onChange={(event) => {
-              applyFilterPatch({ assetId: event.target.value });
-            }}
-            placeholder="Filtrar por ativo ou TAG"
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          />
-          <input
-            type="date"
-            value={filters.dateFrom ?? ""}
-            onChange={(event) => {
-              applyFilterPatch({ dateFrom: event.target.value || undefined });
-            }}
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          />
-          <input
-            type="date"
-            value={filters.dateTo ?? ""}
-            onChange={(event) => {
-              applyFilterPatch({ dateTo: event.target.value || undefined });
-            }}
-            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          />
-          <input
-            value={filters.q}
-            onChange={(event) => {
-              applyFilterPatch({ q: event.target.value });
-            }}
-            placeholder="Buscar por título, ativo ou causa"
-            className="w-48 rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-          />
-        </div>
-        {selectedIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            <span className="font-medium">Ações em massa para {selectedIds.length} selecionadas:</span>
-            <button
-              type="button"
-              disabled={massBusy}
-              onClick={() => applyMassStatus("em_execucao")}
-              className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-            >
-              Marcar em execução
-            </button>
-          <button
-            type="button"
-            disabled={massBusy}
-            onClick={() => applyMassStatus("resolvida")}
-            className="rounded-md border border-blue-200 bg-white px-2.5 py-1 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-          >
-            Marcar resolvida
-          </button>
-          <label className="flex items-center gap-2">
-            <span>Atualizar SLA:</span>
-            <input
-              type="date"
-              disabled={massBusy}
-              onChange={(event) => {
-                if (event.target.value) {
-                  applyMassDueAt(event.target.value);
-                  event.target.value = "";
-                }
-              }}
-              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <span>Responsável:</span>
-            <input
-              type="text"
-              disabled={massBusy}
-              placeholder="Nome"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && event.currentTarget.value.trim()) {
-                  applyMassOwner(event.currentTarget.value.trim());
-                  event.currentTarget.value = "";
-                }
-              }}
-              className="rounded-md border border-blue-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-            />
-          </label>
-        </div>
-      )}
-    </div>
-    ),
-    [applyFilterPatch, applyMassDueAt, applyMassOwner, applyMassStatus, filters.assetId, filters.dateFrom, filters.dateTo, filters.q, filters.severity, filters.status, massBusy, selectedIds.length],
-  );
-
-  const columns = useMemo(
-    () => [
-      {
-        key: "select",
-        label: "",
-        className: "w-8",
-        render: (record: NonConformity) => (
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(record.id)}
-            onChange={(event) => handleSelectToggle(record.id, event.target.checked)}
-            onClick={(event) => event.stopPropagation()}
-            className="size-4 rounded border border-gray-300 text-blue-600 focus:ring-[var(--primary)]"
-          />
-        ),
-      },
-      {
-        key: "status",
-        label: "Status",
-        render: (record: NonConformity) => (
-          <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-gray-700">
-            {record.status ? STATUS_LABEL[record.status] ?? record.status : "-"}
-          </span>
-        ),
-      },
-      {
-        key: "severity",
-        label: "Severidade",
-        render: (record: NonConformity) => (
-          <span
-            className={[
-              "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
-              SEVERITY_STYLES[record.severity ?? ""] ?? "bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]",
-            ].join(" ")}
-          >
-            {record.severity ? record.severity.toUpperCase() : "-"}
-          </span>
-        ),
-      },
-      {
-        key: "title",
-        label: "Título",
-        render: (record: NonConformity) => (
-          <div className="flex flex-col">
-            <span className="font-medium text-gray-800">{record.title ?? "-"}</span>
-            {record.description ? <span className="text-xs text-gray-500">{record.description}</span> : null}
-          </div>
-        ),
-      },
-      {
-        key: "asset",
-        label: "Ativo",
-        render: (record: NonConformity) => {
-          const tag = record.linkedAsset?.tag ?? "-";
-          const modelo = record.linkedAsset?.modelo ?? null;
-          return (
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-gray-700">{tag}</span>
-              {modelo ? <span className="text-xs text-gray-500">{modelo}</span> : null}
-            </div>
-          );
-        },
-      },
-      {
-        key: "createdAt",
-        label: "Criado em",
-        render: (record: NonConformity) => {
-          const createdAtDate = record.createdAt ? new Date(record.createdAt) : null;
-          return (
-            <span className="text-sm text-[var(--hint)]">
-              {createdAtDate ? LONG_DATE_FORMATTER.format(createdAtDate) : "—"}
-            </span>
-          );
-        },
-      },
-      {
-        key: "dueAt",
-        label: "SLA",
-        render: (record: NonConformity) => {
-          const dueDate = record.dueAt ? new Date(record.dueAt) : null;
-          const overdue = isOverdue(record);
-          return (
-            <div className="flex flex-col gap-1">
-              {dueDate ? (
-                <span
-                  className={[
-                    "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                    overdue
-                      ? "bg-red-100 text-red-700 border border-red-200"
-                      : "bg-emerald-100 text-emerald-700 border border-emerald-200",
-                  ].join(" ")}
-                >
-                  {SHORT_DATE_FORMATTER.format(dueDate)}
-                </span>
-              ) : (
-                <span className="text-xs text-gray-400">—</span>
-              )}
-              {overdue && <span className="text-[11px] font-semibold text-red-600">Estourado</span>}
-            </div>
-          );
-        },
-      },
-      {
-        key: "owner",
-        label: "Responsável",
-        render: (record: NonConformity) => (
-          <span className="text-sm text-gray-600">{getCorrectiveOwner(record) ?? "–"}</span>
-        ),
-      },
-      {
-        key: "recurrence",
-        label: "Recorrência",
-        render: (record: NonConformity) => (
-          <span className="text-sm text-gray-600">{record.recurrenceOfId ? "Sim" : "Não"}</span>
-        ),
-      },
-    ],
-    [handleSelectToggle, selectedIds],
-  );
+  };
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900">Gestão de não conformidades</h1>
-        <p className="text-sm text-[var(--hint)]">
-          Consolide NCs de checklists e adicionais, acompanhe SLA, recorrência e CAPA.
-        </p>
-      </div>
-
-      {kpis && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <KpiTile label="NCs abertas" value={kpiOpenTotal} helperText="Total em andamento" />
-          <KpiTile label="% no prazo (mês)" value={kpiOnTime} helperText="Fechadas dentro do SLA" />
-          <KpiTile label="Recorrência últimos 30d" value={kpiRecurrence} helperText="NCs reabertas" />
-          <KpiTile
-            label="Tempo até resolução"
-            value={kpiResolution}
-            helperText={`Containment médio ${kpiContainment}`}
-          />
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Não conformidades</h1>
+          <p className="text-sm text-gray-400">
+            Acompanhe e atualize as tratativas de não conformidades abertas nos checklists.
+          </p>
         </div>
-      )}
+        <button
+          onClick={() => void loadData()}
+          disabled={loading}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? "Carregando..." : "Recarregar"}
+        </button>
+      </header>
 
-      {kpis && (
-        <Card className="space-y-6" padding="lg">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">Abertura x fechamento (dia)</h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={kpiDailySeries} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="opened" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="closed" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="period" stroke="#6b7280" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-                    <Legend />
-                    <Area type="monotone" dataKey="opened" name="Abertas" stroke="#2563eb" fill="url(#opened)" />
-                    <Area type="monotone" dataKey="closed" name="Fechadas" stroke="#10b981" fill="url(#closed)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">Pareto de causas raiz</h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={kpiPareto} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="rootCause" stroke="#6b7280" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="value" name="Ocorrências" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+      <section className="space-y-4 rounded-xl bg-gray-800 p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div>
+            <label className="text-sm">Máquina</label>
+            <select
+              value={machineFilter}
+              onChange={(event) => setMachineFilter(event.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+            >
+              <option value="all">Todas</option>
+              {machines.map((machine) => (
+                <option key={machine.id} value={machine.id}>
+                  {machine.modelo} — {machine.tag}
+                </option>
+              ))}
+            </select>
           </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">NCs por sistema</h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={kpiSeverityBySystem} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="system" stroke="#6b7280" tick={{ fontSize: 12 }} />
-                    <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <Legend />
-                    <Tooltip />
-                    <Bar dataKey="alta" stackId="a" fill="#ef4444" name="Alta" />
-                    <Bar dataKey="media" stackId="a" fill="#f59e0b" name="Média" />
-                    <Bar dataKey="baixa" stackId="a" fill="#10b981" name="Baixa" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-gray-900">Distribuição por severidade</h2>
-              <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
-                {Object.entries(kpiOpenBySeverity).map(([severity, value]) => (
-                  <div key={severity} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
-                    <div className="text-xl font-semibold text-gray-900">{value}</div>
-                    <div className="text-xs uppercase tracking-wide text-gray-500">{severity}</div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">
-                Métricas calculadas com base nas {Math.min(MAX_PAGE_SIZE, total)} últimas ocorrências carregadas.
-              </p>
-            </div>
+          <div>
+            <label className="text-sm">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
+              className="mt-1 w-full rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
-        </Card>
-      )}
-
-      <Card padding="lg" className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <h2 className="text-xl font-semibold text-gray-900">Lista de não conformidades</h2>
-            <p className="text-sm text-[var(--hint)]">
-              Filtre e atualize status, responsáveis e SLAs das NCs provenientes dos checklists.
+          <div>
+            <p className="text-xs text-gray-400">
+              Apenas perguntas respondidas como &quot;NC&quot; são exibidas nesta lista para acompanhamento contínuo.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>Total: {total}</span>
-            <span>•</span>
-            <span>Selecionadas: {selectedIds.length}</span>
-          </div>
         </div>
+      </section>
 
-        <div aria-live="polite" className="space-y-2">
-          {error && (
-            <Alert
-              variant="error"
-              title="Erro"
-              description={
-                <div className="space-y-2">
-                  <span>{error}</span>
-                  {errorDetails && (
-                    <div className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => setShowErrorDetails((prev) => !prev)}
-                        className="text-sm font-medium text-red-700 underline-offset-2 hover:underline"
-                      >
-                        {showErrorDetails ? "Ocultar detalhes" : "Ver detalhes"}
-                      </button>
-                      {showErrorDetails && (
-                        <pre className="whitespace-pre-wrap break-words rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-                          {errorDetails}
-                        </pre>
-                      )}
-                    </div>
+      {feedback && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            feedback.type === "error"
+              ? "border-red-600 bg-red-900/30 text-red-200"
+              : "border-emerald-600 bg-emerald-900/30 text-emerald-200"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      <section className="space-y-4">
+        {loading ? (
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-400">
+            Carregando não conformidades...
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-400">
+            Nenhuma não conformidade encontrada para os filtros selecionados.
+          </div>
+        ) : (
+          filteredItems.map((item, index) => (
+            <article
+              key={item.id}
+              className="space-y-4 rounded-xl border border-gray-800 bg-gray-900 p-5 shadow-lg shadow-black/20"
+            >
+              <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-white">
+                    {index + 1}. {item.questionText}
+                  </p>
+                  <div className="text-xs text-gray-400">
+                    <span>Checklist enviado em {new Date(item.createdAt).toLocaleString()}</span>
+                    {item.template && (
+                      <span className="ml-2 block sm:inline">
+                        Template: {item.template.title} (v{item.template.version})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Máquina: {item.machine?.modelo ?? item.machineId}
+                    {item.machine?.tag ? ` • TAG ${item.machine.tag}` : ""}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    Operador: {item.operatorNome ?? "Não informado"}
+                    {item.operatorMatricula ? ` (Mat. ${item.operatorMatricula})` : ""}
+                  </div>
+                  {item.observation && (
+                    <p className="text-sm text-gray-300">
+                      Observações do operador: {item.observation}
+                    </p>
+                  )}
+                  {item.photoUrl && (
+                    <a
+                      href={item.photoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-medium text-blue-300 underline"
+                    >
+                      Ver evidência
+                    </a>
                   )}
                 </div>
-              }
-              action={
-                <button
-                  type="button"
-                  onClick={handleRetry}
-                  className="rounded-md border border-red-200 bg-white px-3 py-1 text-sm font-medium text-red-700 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"
-                >
-                  Tentar novamente
-                </button>
-              }
-            />
-          )}
-          {!error && !loading && records.length === 0 && (
-            <p className="text-sm text-[var(--hint)]">Nenhuma não conformidade encontrada para os filtros selecionados.</p>
-          )}
-        </div>
+                <div className="flex flex-col items-end gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                      item.draftStatus === "open"
+                        ? "bg-red-700 text-white"
+                        : item.draftStatus === "in_progress"
+                        ? "bg-yellow-600 text-black"
+                        : "bg-emerald-700 text-white"
+                    }`}
+                  >
+                    {statusLabel[item.draftStatus]}
+                  </span>
+                  {item.isRecurrence && (
+                    <span
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                        item.recurrenceStatus === "still_nc"
+                          ? "bg-amber-400 text-black"
+                          : "bg-emerald-600 text-white"
+                      }`}
+                    >
+                      Reincidência ·
+                      {" "}
+                      {item.recurrenceStatus === "still_nc"
+                        ? "Permanece em NC"
+                        : "Informada como resolvida"}
+                    </span>
+                  )}
+                  <a
+                    href={`/responses/${item.responseId}`}
+                    className="rounded-md border border-gray-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-200 transition hover:border-gray-500 hover:bg-gray-800"
+                  >
+                    Ver checklist
+                  </a>
+                </div>
+              </header>
 
-        {massMessage && <Alert variant={massMessage.type === "success" ? "success" : "error"} description={massMessage.text} />}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <label className="flex flex-col gap-2 text-sm">
+                  <span className="text-xs uppercase tracking-wide text-gray-300">Tratativa planejada</span>
+                  <textarea
+                    value={item.summary}
+                    onChange={(event) => updateItemField(item.id, { summary: event.target.value })}
+                    className="min-h-[96px] rounded-lg border border-gray-700 bg-gray-900/70 p-3 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
+                    placeholder="Descreva a ação corretiva e preventiva"
+                  />
+                </label>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span className="text-xs uppercase tracking-wide text-gray-300">Responsável</span>
+                    <input
+                      value={item.responsible}
+                      onChange={(event) => updateItemField(item.id, { responsible: event.target.value })}
+                      className="rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:border-blue-500 focus:outline-none"
+                      placeholder="Nome do responsável"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm">
+                    <span className="text-xs uppercase tracking-wide text-gray-300">Prazo</span>
+                    <input
+                      type="date"
+                      value={item.deadline ?? ""}
+                      onChange={(event) =>
+                        updateItemField(item.id, { deadline: event.target.value || undefined })
+                      }
+                      className="rounded-lg border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+              </div>
 
-        <DataTable
-          columns={columns}
-          data={records}
-          filters={filterControls}
-          page={page}
-          pageSize={pageSize}
-          total={total}
-          isLoading={loading}
-          onPageChange={handlePageChange}
-          onPageSizeChange={handlePageSizeChange}
-          getRowId={(record) => record.id}
-          onRowClick={(record) => router.push(`/admin/non-conformities/${record.id}`)}
-        />
-      </Card>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {statusOrder.map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => updateItemField(item.id, { draftStatus: status })}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        item.draftStatus === status
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-800 text-gray-200 hover:bg-gray-700"
+                      }`}
+                    >
+                      {statusLabel[status]}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  {item.updatedAt && (
+                    <span className="text-xs text-gray-500">
+                      Atualizado em {new Date(item.updatedAt).toLocaleString()}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handleSaveItem(item.id)}
+                    disabled={savingItemId === item.id}
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingItemId === item.id ? "Salvando..." : "Salvar tratativa"}
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
+      </section>
     </div>
-  );
-}
-
-export default function NonConformitiesOverviewPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-sm text-[var(--hint)]">Carregando...</div>}>
-      <NonConformitiesOverviewContent />
-    </Suspense>
   );
 }
