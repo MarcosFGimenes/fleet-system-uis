@@ -1,7 +1,8 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ChecklistPeriodicityUnit,
   ChecklistPhotoRule,
   ChecklistQuestion,
   ChecklistTemplate,
@@ -13,9 +14,18 @@ type QuestionDraft = {
   photoRule: ChecklistPhotoRule;
 };
 
+export type TemplateFormPayload = {
+  template: Omit<ChecklistTemplate, "id" | "periodicity">;
+  periodicity: {
+    active: boolean;
+    quantity: number;
+    unit: ChecklistPeriodicityUnit;
+  };
+};
+
 type Props = {
   initial?: Partial<ChecklistTemplate>;
-  onSubmit: (data: Omit<ChecklistTemplate, "id">) => Promise<void>;
+  onSubmit: (data: TemplateFormPayload) => Promise<void>;
   onCancel?: () => void;
 };
 
@@ -40,6 +50,16 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         : "optional",
     }));
   });
+
+  const [periodicityActive, setPeriodicityActive] = useState<boolean>(
+    initial?.periodicity?.active ?? false,
+  );
+  const [periodicityQuantity, setPeriodicityQuantity] = useState<number>(
+    initial?.periodicity?.quantity ?? 1,
+  );
+  const [periodicityUnit, setPeriodicityUnit] = useState<ChecklistPeriodicityUnit>(
+    initial?.periodicity?.unit ?? "day",
+  );
 
   useEffect(() => {
     if (!initial) {
@@ -86,17 +106,32 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       alert("Adicione ao menos uma pergunta.");
       return;
     }
+    const normalizedQuantity = Math.max(1, Math.floor(Number(periodicityQuantity) || 0));
+    if (periodicityActive) {
+      if (!Number.isFinite(periodicityQuantity) || normalizedQuantity < 1) {
+        alert("Informe uma periodicidade válida (quantidade >= 1).");
+        return;
+      }
+    }
+
     await onSubmit({
-      title: title.trim(),
-      type,
-      version,
-      isActive,
-      questions: clean.map((question) => ({
-        id: question.id,
-        text: question.text,
-        photoRule: question.photoRule,
-        requiresPhoto: question.photoRule === "required_nc",
-      } satisfies ChecklistQuestion)),
+      template: {
+        title: title.trim(),
+        type,
+        version,
+        isActive,
+        questions: clean.map((question) => ({
+          id: question.id,
+          text: question.text,
+          photoRule: question.photoRule,
+          requiresPhoto: question.photoRule === "required_nc",
+        } satisfies ChecklistQuestion)),
+      },
+      periodicity: {
+        active: periodicityActive,
+        quantity: normalizedQuantity,
+        unit: periodicityUnit,
+      },
     });
   };
 
@@ -105,6 +140,23 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
     optional: "Foto opcional",
     required_nc: "Foto obrigatória se marcar NC",
   };
+
+  const periodicityUnitLabel = useMemo(
+    () => ({
+      day: { singular: "dia", plural: "dias" },
+      week: { singular: "semana", plural: "semanas" },
+      month: { singular: "mês", plural: "meses" },
+    }),
+    [],
+  );
+
+  const periodicityHelper = periodicityActive
+    ? `Será exigido ao menos 1 envio a cada ${Math.max(1, Math.floor(periodicityQuantity))} ${
+        Math.max(1, Math.floor(periodicityQuantity)) === 1
+          ? periodicityUnitLabel[periodicityUnit].singular
+          : periodicityUnitLabel[periodicityUnit].plural
+      }.`
+    : "Nenhuma exigência de periodicidade ativa.";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -153,6 +205,60 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           Ativo
         </label>
       </div>
+
+      <section className="space-y-3 rounded-lg border border-gray-700 bg-gray-800 p-4">
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold">Periodicidade mínima</h3>
+            <p className="text-xs text-gray-400">{periodicityHelper}</p>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={periodicityActive}
+              onChange={(event) => setPeriodicityActive(event.target.checked)}
+              className="accent-blue-500"
+            />
+            Exigir periodicidade
+          </label>
+        </header>
+
+        {periodicityActive && (
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_200px]">
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Quantidade</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={periodicityQuantity}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  if (Number.isFinite(value)) {
+                    setPeriodicityQuantity(value);
+                  }
+                }}
+                className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1 text-sm">
+              <span>Unidade</span>
+              <select
+                value={periodicityUnit}
+                onChange={(event) =>
+                  setPeriodicityUnit(event.target.value as ChecklistPeriodicityUnit)
+                }
+                className="rounded-md border border-gray-700 bg-gray-900 px-3 py-2 text-sm"
+              >
+                <option value="day">Dia</option>
+                <option value="week">Semana</option>
+                <option value="month">Mês</option>
+              </select>
+            </label>
+          </div>
+        )}
+      </section>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
