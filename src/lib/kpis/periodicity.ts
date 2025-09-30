@@ -120,6 +120,7 @@ async function fetchMachines(db: Firestore, filters: PeriodicityComplianceFilter
         modelo,
         tag: data?.tag ?? data?.placa ?? doc.id,
         setor,
+
         checklists: Array.isArray(data?.checklists) ? data?.checklists : [],
       },
     ];
@@ -135,6 +136,7 @@ async function fetchMachines(db: Firestore, filters: PeriodicityComplianceFilter
       modelo,
       tag: data?.tag ?? data?.placa ?? doc.id,
       setor,
+
       checklists: Array.isArray(data?.checklists) ? data?.checklists : [],
     } satisfies MachineRecord;
   });
