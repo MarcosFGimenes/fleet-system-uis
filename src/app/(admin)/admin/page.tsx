@@ -46,7 +46,6 @@
     cta: "Gerenciar usuários",
     tone: "neutral",
     emoji: "👥",
-    disabled: true,
   },
 ] as const;
 
@@ -78,17 +77,11 @@ export default function AdminHomePage() {
       <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {CARDS.map((card) => {
           const tone = toneStyles[card.tone] ?? toneStyles.neutral;
-          const isDisabled = "disabled" in card && card.disabled;
           return (
             <a
               key={card.href}
-              href={isDisabled ? "#" : card.href}
-              aria-disabled={isDisabled}
-              className={`group relative block rounded-2xl border p-6 transition-all hover:-translate-y-1 hover:shadow-md-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
-                isDisabled
-                  ? "cursor-not-allowed opacity-60 border-[var(--border)] bg-[var(--surface)]"
-                  : tone
-              }`}
+              href={card.href}
+              className={`group relative block rounded-2xl border p-6 transition-all hover:-translate-y-1 hover:shadow-md-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${tone}`}
             >
               <div className="flex items-start gap-4">
                 <span aria-hidden="true" className="text-2xl">
@@ -97,23 +90,16 @@ export default function AdminHomePage() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-[var(--text)]">
                     {card.title}
-                  {isDisabled && (
-                    <span className="ml-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5 text-xs font-medium text-[var(--hint)]">
-                      Em breve
-                    </span>
-                  )}
                   </h3>
                   <p className="mt-2 text-sm text-[var(--muted)]">{card.description}</p>
                 </div>
               </div>
-              {!isDisabled && (
-                <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[var(--primary)]">
-                  {card.cta}
-                  <span aria-hidden="true" className="transition group-hover:translate-x-1">
-                    →
-                  </span>
-                </div>
-              )}
+              <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[var(--primary)]">
+                {card.cta}
+                <span aria-hidden="true" className="transition group-hover:translate-x-1">
+                  →
+                </span>
+              </div>
             </a>
           );
         })}
