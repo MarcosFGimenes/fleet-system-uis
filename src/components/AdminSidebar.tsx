@@ -18,7 +18,7 @@ const NAV: NavItem[] = [
   { href: "/admin/templates", label: "Templates", badge: "Modelos" },
   { href: "/admin/responses", label: "Checklists", badge: "Histórico" },
   { href: "/admin/non-conformities", label: "Não conformidades", badge: "NCs" },
-  { href: "/admin/users", label: "Usuários", badge: "Em breve", disabled: true },
+  { href: "/admin/users", label: "Usuários" },
 ];
 
 export default function AdminSidebar() {
