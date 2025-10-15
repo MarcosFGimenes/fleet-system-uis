@@ -1,7 +1,16 @@
 import jsPDF from "jspdf";
 import JSZip from "jszip";
-import { ChecklistAnswer, ChecklistResponse, ChecklistTemplate } from "@/types/checklist";
+import {
+  ChecklistAnswer,
+  ChecklistResponse,
+  ChecklistTemplate,
+} from "@/types/checklist";
 import { Machine } from "@/types/machine";
+import {
+  formatDateShort,
+  getTemplateActorConfig,
+  getTemplateHeader,
+} from "@/lib/checklist";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
@@ -131,6 +140,88 @@ const fetchImageDataUrl = async (url: string) => {
   }
 };
 
+const numberFormatter = new Intl.NumberFormat("pt-BR", {
+  maximumFractionDigits: 2,
+});
+
+const formatNumericValue = (value: number | null | undefined) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return numberFormatter.format(value);
+  }
+  return "";
+};
+
+type HeaderSnapshot = {
+  title: string;
+  foNumber: string;
+  issueDate: string;
+  revision: string;
+  documentNumber: string;
+  lac: string;
+  motorista: string;
+  placa: string;
+  kmAtual: number | null;
+  kmAnterior: number | null;
+  dataInspecao: string;
+};
+
+const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
+  const { response, template, machine } = detail;
+  if (response.headerFrozen) {
+    const frozen = response.headerFrozen;
+    return {
+      title: frozen.title || template?.title || "Checklist",
+      foNumber: frozen.foNumber ?? "",
+      issueDate: frozen.issueDate ?? "",
+      revision: frozen.revision ?? "",
+      documentNumber: frozen.documentNumber ?? "",
+      lac: frozen.lac ?? "012",
+      motorista: frozen.motorista ?? "",
+      placa: frozen.placa ?? machine?.placa ?? "",
+      kmAtual: typeof frozen.kmAtual === "number" ? frozen.kmAtual : null,
+      kmAnterior: typeof frozen.kmAnterior === "number" ? frozen.kmAnterior : null,
+      dataInspecao: frozen.dataInspecao ?? formatDateShort(new Date()),
+    } satisfies HeaderSnapshot;
+  }
+
+  const templateHeader = getTemplateHeader(template);
+  const actorConfig = getTemplateActorConfig(template);
+  const parsedDate = parseResponseDate(response.createdAt) ?? new Date();
+  const readingValue =
+    typeof response.km === "number"
+      ? response.km
+      : typeof response.horimetro === "number"
+      ? response.horimetro
+      : null;
+  const driverName =
+    actorConfig.kind === "mecanico"
+      ? response.actor?.driverNome ?? ""
+      : response.actor?.driverNome ?? response.operatorNome ?? "";
+
+  return {
+    title: template?.title ?? "Checklist",
+    foNumber: templateHeader.foNumber ?? "",
+    issueDate: templateHeader.issueDate ?? "",
+    revision: templateHeader.revision ?? "",
+    documentNumber: templateHeader.documentNumber ?? "",
+    lac: "012",
+    motorista: driverName ?? "",
+    placa: machine?.placa ?? "",
+    kmAtual: readingValue,
+    kmAnterior: typeof response.previousKm === "number" ? response.previousKm : null,
+    dataInspecao: formatDateShort(parsedDate),
+  } satisfies HeaderSnapshot;
+};
+
+const resolveActorKind = (detail: ChecklistPdfDetail): ChecklistTemplate["type"] => {
+  return (
+    detail.response.actor?.kind ??
+    detail.template?.actor?.kind ??
+    detail.template?.type ??
+    "operador"
+  );
+};
+
 const appendChecklistToDoc = async (
   doc: jsPDF,
   detail: ChecklistPdfDetail,
@@ -141,6 +232,9 @@ const appendChecklistToDoc = async (
   const lineHeight = 6;
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const actorConfig = getTemplateActorConfig(template);
+  const actorKind = resolveActorKind(detail);
+  const headerData = resolveHeaderData(detail);
 
   let y = margin;
 
@@ -169,6 +263,178 @@ const appendChecklistToDoc = async (
     }
   };
 
+  const drawHeaderCell = (
+    x: number,
+    width: number,
+    yPos: number,
+    height: number,
+    label: string,
+    value: string,
+  ) => {
+    doc.rect(x, yPos, width, height);
+    const originalSize = doc.getFontSize();
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.text(label.toUpperCase(), x + 2, yPos + 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    const display = value ? String(value) : "";
+    const lines = doc.splitTextToSize(display, width - 4) as string[];
+    const baseY = yPos + height - 3 - (lines.length - 1) * 4;
+    lines.forEach((line, index) => {
+      doc.text(line, x + 2, baseY + index * 4);
+    });
+    doc.setFontSize(originalSize);
+    doc.setFont("helvetica", "normal");
+  };
+
+  type SignatureBlock = {
+    label: string;
+    matricula: string;
+    nome: string;
+    signatureUrl: string | null;
+    required: boolean;
+  };
+
+  const drawSignatureBlock = async (
+    xPos: number,
+    top: number,
+    width: number,
+    height: number,
+    block: SignatureBlock,
+  ) => {
+    doc.rect(xPos, top, width, height);
+    const labelY = top + 6;
+    const originalSize = doc.getFontSize();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(block.label, xPos + width / 2, labelY, { align: "center", baseline: "middle" });
+
+    const signatureTop = top + 10;
+    const signatureHeight = 20;
+    doc.setDrawColor(180);
+    doc.line(xPos + 4, signatureTop + signatureHeight, xPos + width - 4, signatureTop + signatureHeight);
+    doc.setDrawColor(0);
+
+    if (block.signatureUrl) {
+      const dataUrl = await fetchImageDataUrl(block.signatureUrl);
+      if (dataUrl) {
+        try {
+          const format = resolveImageFormat(dataUrl);
+          const props = doc.getImageProperties(dataUrl);
+          const maxWidth = width - 8;
+          const maxHeight = signatureHeight - 2;
+          const ratio = Math.min(maxWidth / props.width, maxHeight / props.height, 1);
+          const displayWidth = props.width * ratio;
+          const displayHeight = props.height * ratio;
+          const offsetX = xPos + (width - displayWidth) / 2;
+          doc.addImage(dataUrl, format, offsetX, signatureTop, displayWidth, displayHeight);
+        } catch (error) {
+          console.error("Falha ao inserir assinatura no PDF", error);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.text("Assinatura indisponível", xPos + width / 2, signatureTop + signatureHeight - 4, {
+            align: "center",
+          });
+        }
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.text("Assinatura indisponível", xPos + width / 2, signatureTop + signatureHeight - 4, {
+          align: "center",
+        });
+      }
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.text("Assinatura", xPos + width / 2, signatureTop + signatureHeight - 4, {
+        align: "center",
+      });
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const matriculaText = block.matricula ? `Matrícula: ${block.matricula}` : "Matrícula: __________";
+    const nomeText = block.nome ? `Nome: ${block.nome}` : "Nome: __________________";
+    doc.text(matriculaText, xPos + 4, top + height - 10);
+    doc.text(nomeText, xPos + 4, top + height - 4);
+    doc.setFontSize(originalSize);
+  };
+
+  const renderSignatureSection = async () => {
+    const blocks: SignatureBlock[] = [];
+    const actorLabel =
+      actorKind === "mecanico"
+        ? "Mecânico"
+        : actorKind === "motorista"
+        ? "Motorista"
+        : "Operador";
+
+    const operatorMatricula =
+      actorKind === "mecanico"
+        ? response.actor?.mechanicMatricula ?? response.operatorMatricula ?? ""
+        : response.operatorMatricula ?? "";
+    const operatorNome =
+      actorKind === "mecanico"
+        ? response.actor?.mechanicNome ?? response.operatorNome ?? ""
+        : response.operatorNome ?? "";
+
+    blocks.push({
+      label: `Assinatura do ${actorLabel.toLowerCase()}`,
+      matricula: operatorMatricula,
+      nome: operatorNome ?? "",
+      signatureUrl: response.signatures?.operatorUrl ?? null,
+      required: actorConfig.requireOperatorSignature ?? true,
+    });
+
+    const driverVisible =
+      actorKind === "mecanico" ||
+      (actorConfig.requireMotoristSignature ?? false) ||
+      Boolean(response.actor?.driverNome) ||
+      Boolean(response.signatures?.driverUrl) ||
+      Boolean(headerData.motorista);
+
+    if (driverVisible) {
+      blocks.push({
+        label: "Assinatura do motorista",
+        matricula: response.actor?.driverMatricula ?? "",
+        nome: response.actor?.driverNome ?? headerData.motorista ?? "",
+        signatureUrl: response.signatures?.driverUrl ?? null,
+        required: actorConfig.requireMotoristSignature ?? false,
+      });
+    }
+
+    if (blocks.length === 0) {
+      return;
+    }
+
+    const blockHeight = 48;
+    const gap = blocks.length > 1 ? 12 : 0;
+    const totalWidth = pageWidth - margin * 2;
+    const blockWidth =
+      blocks.length === 1
+        ? totalWidth
+        : (totalWidth - gap * (blocks.length - 1)) / blocks.length;
+
+    const requiredHeight = Math.ceil((blockHeight + lineHeight + 4) / lineHeight);
+    ensureSpace(requiredHeight);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Assinaturas", margin, y);
+    y += lineHeight;
+
+    ensureSpace(Math.ceil(blockHeight / lineHeight) + 1);
+    const top = y;
+    for (let index = 0; index < blocks.length; index++) {
+      const block = blocks[index];
+      const xPos = margin + index * (blockWidth + gap);
+      await drawSignatureBlock(xPos, top, blockWidth, blockHeight, block);
+    }
+    y = top + blockHeight + 6;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+  };
+
   if (options.preface) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
@@ -183,24 +449,109 @@ const appendChecklistToDoc = async (
     doc.setFontSize(16);
   }
 
-  const templateTitle = template?.title ?? "Checklist";
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+
   const machineLabel = machine
     ? `${machine.modelo}${machine.tag ? ` • TAG ${machine.tag}` : ""}`
     : response.machineId;
 
-  doc.setFont("helvetica", "bold");
-  addParagraph(`Checklist - ${templateTitle}`, { spacing: 2 });
+  const logoWidth = 42;
+  const row1Height = 18;
+  const row2Height = 12;
+  const row3Height = 14;
+  const row4Height = 12;
+  const headerHeight = row1Height + row2Height + row3Height + row4Height;
+  const availableWidth = pageWidth - margin * 2;
+  ensureSpace(Math.ceil(headerHeight / lineHeight) + 2);
 
-  doc.setFontSize(11);
+  const headerTop = y;
+  doc.setLineWidth(0.2);
+  doc.rect(margin, headerTop, logoWidth, row1Height);
+  doc.rect(margin + logoWidth, headerTop, availableWidth - logoWidth, row1Height);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("LAR", margin + logoWidth / 2, headerTop + row1Height / 2, {
+    align: "center",
+    baseline: "middle",
+  });
+  doc.setFontSize(10);
+  doc.text(headerData.foNumber || "", margin + availableWidth - 2, headerTop + 6, {
+    align: "right",
+  });
+  doc.setFont("helvetica", "normal");
+  const emissionLabel = headerData.issueDate ? headerData.issueDate : "--/--/--";
+  const revisionLabel = headerData.revision ? headerData.revision : "--/--/--";
+  const documentLabel = headerData.documentNumber ? headerData.documentNumber : "-";
+  doc.text(
+    `EMISSÃO: ${emissionLabel}    REVISÃO: ${revisionLabel}    Nº: ${documentLabel}`,
+    margin + logoWidth + 2,
+    headerTop + row1Height - 4,
+  );
+
+  const titleY = headerTop + row1Height;
+  doc.rect(margin, titleY, availableWidth, row2Height);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text(headerData.title || "Checklist", margin + availableWidth / 2, titleY + row2Height / 2, {
+    align: "center",
+    baseline: "middle",
+  });
+
+  const row3Y = titleY + row2Height;
+  const lacWidth = 30;
+  const placaWidth = 45;
+  const kmWidth = 40;
+  const motoristaWidth = availableWidth - lacWidth - placaWidth - kmWidth;
+  drawHeaderCell(margin, lacWidth, row3Y, row3Height, "Lac", headerData.lac || "012");
+  drawHeaderCell(margin + lacWidth, motoristaWidth, row3Y, row3Height, "Motorista", headerData.motorista || "");
+  drawHeaderCell(margin + lacWidth + motoristaWidth, placaWidth, row3Y, row3Height, "Placa", headerData.placa || "");
+  drawHeaderCell(
+    margin + lacWidth + motoristaWidth + placaWidth,
+    kmWidth,
+    row3Y,
+    row3Height,
+    "KM",
+    formatNumericValue(headerData.kmAtual),
+  );
+
+  const row4Y = row3Y + row3Height;
+  const kmAnteriorWidth = availableWidth * 0.6;
+  const dataWidth = availableWidth - kmAnteriorWidth;
+  drawHeaderCell(
+    margin,
+    kmAnteriorWidth,
+    row4Y,
+    row4Height,
+    "Km anterior",
+    formatNumericValue(headerData.kmAnterior),
+  );
+  drawHeaderCell(
+    margin + kmAnteriorWidth,
+    dataWidth,
+    row4Y,
+    row4Height,
+    "Data inspeção",
+    headerData.dataInspecao || "",
+  );
+
+  y = row4Y + row4Height + 8;
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   addParagraph(`Checklist ID: ${response.id}`);
   addParagraph(`Máquina: ${machineLabel}`);
-  addParagraph(`Data: ${dateTimeFormatter.format(new Date(response.createdAt))}`);
+  addParagraph(`Emitido em: ${dateTimeFormatter.format(new Date(response.createdAt))}`);
 
   if (response.operatorNome || response.operatorMatricula) {
-    const operatorName = response.operatorNome ? response.operatorNome : "Não informado";
+    const actorLabel =
+      actorKind === "mecanico"
+        ? "Mecânico"
+        : actorKind === "motorista"
+        ? "Motorista"
+        : "Operador";
+    const actorName = response.operatorNome ? response.operatorNome : "Não informado";
     const matriculaLabel = response.operatorMatricula ? ` (Mat. ${response.operatorMatricula})` : "";
-    addParagraph(`Operador: ${operatorName}${matriculaLabel}`);
+    addParagraph(`${actorLabel}: ${actorName}${matriculaLabel}`);
   }
 
   if (response.km != null || response.horimetro != null) {
@@ -214,6 +565,8 @@ const appendChecklistToDoc = async (
     addParagraph(`Leituras: ${parts.join(" • ")}`);
   }
 
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
   addParagraph("", { spacing: 2 });
   addParagraph("Perguntas", { bold: true, spacing: 2 });
 
@@ -270,6 +623,8 @@ const appendChecklistToDoc = async (
     }
     addParagraph("", { spacing: 2 });
   }
+
+  await renderSignatureSection();
 };
 
 export const buildChecklistPdf = async (detail: ChecklistPdfDetail) => {
