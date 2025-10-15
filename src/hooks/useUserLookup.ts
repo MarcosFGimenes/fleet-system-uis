@@ -68,7 +68,12 @@ export function useUserLookup(matriculaInput: string) {
         const resolvedNome = data.nome?.trim() ?? "";
         const resolvedRole = data.role;
 
-        const validRoles: readonly UserRole[] = ["operador", "mecanico", "admin"] as const;
+        const validRoles: readonly UserRole[] = [
+          "operador",
+          "motorista",
+          "mecanico",
+          "admin",
+        ] as const;
         if (!resolvedRole || !validRoles.includes(resolvedRole)) {
           setUserLookup({
             state: "error",

@@ -15,6 +15,7 @@ import {
 
 const ROLE_LABEL: Record<User["role"], string> = {
   operador: "Operador",
+  motorista: "Motorista",
   mecanico: "Mecânico",
   admin: "Administrador",
 };
@@ -70,7 +71,7 @@ export default function UsersAdminPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Usuários</h1>
           <p className="text-sm text-[var(--muted)]">
-            Cadastre operadores, mecânicos e administradores por matrícula.
+            Cadastre operadores, motoristas, mecânicos e administradores por matrícula.
           </p>
         </div>
         {ui.mode === "list" && (

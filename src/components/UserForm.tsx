@@ -11,6 +11,7 @@ type Props = {
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "operador", label: "Operador" },
+  { value: "motorista", label: "Motorista" },
   { value: "mecanico", label: "Mecânico" },
   { value: "admin", label: "Administrador" },
 ];
