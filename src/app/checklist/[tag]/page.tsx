@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
+  Timestamp,
   addDoc,
   collection,
   doc,
@@ -23,6 +24,7 @@ import type {
   ChecklistResponse,
   ChecklistTemplate,
   ChecklistPhotoRule,
+  ChecklistTemplatePeriodicity,
 } from "@/types/checklist";
 import type { UserRole } from "@/types/user";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
@@ -59,6 +61,8 @@ type AnswerMap = Record<string, AnswerDraft>;
 type PreviousResponseMeta = {
   id: string;
   createdAt?: string | null;
+  km?: number | null;
+  horimetro?: number | null;
 };
 
 type PreviousNcMap = Record<string, ChecklistAnswer>;
@@ -67,6 +71,78 @@ type ExtraNc = {
   title: string;
   description?: string;
   severity?: "baixa" | "media" | "alta";
+};
+
+type PeriodicityRestriction = {
+  lastSubmissionAt: string;
+  nextAllowedAt: string;
+  intervalLabel: string;
+};
+
+const PERIODICITY_UNIT_LABEL: Record<
+  ChecklistTemplatePeriodicity["unit"],
+  { singular: string; plural: string }
+> = {
+  day: { singular: "dia", plural: "dias" },
+  week: { singular: "semana", plural: "semanas" },
+  month: { singular: "mês", plural: "meses" },
+};
+
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+
+const formatDateTimePtBr = (date: Date): string => {
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const formatPeriodicityInterval = (
+  periodicity: ChecklistTemplatePeriodicity,
+): string => {
+  const { quantity, unit } = periodicity;
+  const label = PERIODICITY_UNIT_LABEL[unit];
+  if (!label) return `${quantity} ${unit}`;
+  return `${quantity} ${quantity === 1 ? label.singular : label.plural}`;
+};
+
+const computeNextAllowedDate = (
+  periodicity: ChecklistTemplatePeriodicity,
+  lastSubmission: Date,
+): Date => {
+  let multiplier = 1;
+  if (periodicity.unit === "week") multiplier = 7;
+  if (periodicity.unit === "month") multiplier = 30;
+  const intervalMs = periodicity.quantity * multiplier * MS_IN_DAY;
+  return new Date(lastSubmission.getTime() + intervalMs);
+};
+
+const resolveCreatedAtIso = (
+  data: Omit<ChecklistResponse, "id">,
+): string | null => {
+  if (typeof data.createdAt === "string") return data.createdAt;
+  const ts = data.createdAtTs;
+  if (ts instanceof Timestamp) {
+    try {
+      return ts.toDate().toISOString();
+    } catch (error) {
+      console.error("Falha ao converter createdAtTs", error);
+    }
+  } else if (ts && typeof (ts as Timestamp).toDate === "function") {
+    try {
+      return (ts as Timestamp).toDate().toISOString();
+    } catch (error) {
+      console.error("Falha ao converter createdAtTs", error);
+    }
+  }
+  return null;
+};
+
+const formatNumericPtBr = (value: number): string => {
+  return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
 };
 
 type ChecklistResponsePayload = {
@@ -202,6 +278,8 @@ export default function ChecklistByTagPage() {
   const [answers, setAnswers] = useState<AnswerMap>({});
 
   const previewUrlsRef = useRef<Set<string>>(new Set());
+  const kmEditedRef = useRef(false);
+  const horimetroEditedRef = useRef(false);
 
   const registerPreviewUrl = (url: string) => {
     previewUrlsRef.current.add(url);
@@ -232,6 +310,8 @@ export default function ChecklistByTagPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [extraNcs, setExtraNcs] = useState<ExtraNc[]>([]);
+  const [periodicityRestriction, setPeriodicityRestriction] =
+    useState<PeriodicityRestriction | null>(null);
 
   const { userLookup, userInfo, nome, setNome } = useUserLookup(matricula);
   const { notification, showNotification, hideNotification } = useNotification();
@@ -325,6 +405,7 @@ export default function ChecklistByTagPage() {
           setPreviousResponseMeta(null);
           setPreviousNcMap({});
           setPreviousError(null);
+          setPeriodicityRestriction(null);
         }
         return;
       }
@@ -347,15 +428,19 @@ export default function ChecklistByTagPage() {
         if (previousSnap.empty) {
           setPreviousResponseMeta(null);
           setPreviousNcMap({});
+          setPeriodicityRestriction(null);
           setPreviousLoading(false);
           return;
         }
 
         const docSnap = previousSnap.docs[0];
         const data = docSnap.data() as Omit<ChecklistResponse, "id">;
+        const createdAtIso = resolveCreatedAtIso(data);
         const meta: PreviousResponseMeta = {
           id: docSnap.id,
-          createdAt: data.createdAt ?? null,
+          createdAt: createdAtIso,
+          km: typeof data.km === "number" ? data.km : null,
+          horimetro: typeof data.horimetro === "number" ? data.horimetro : null,
         };
 
         const ncMap: PreviousNcMap = {};
@@ -363,6 +448,14 @@ export default function ChecklistByTagPage() {
           if (answer?.response === "nc") {
             ncMap[answer.questionId] = answer as ChecklistAnswer;
           }
+        }
+
+        if (!kmEditedRef.current && typeof data.km === "number") {
+          setKm(String(data.km));
+        }
+
+        if (!horimetroEditedRef.current && typeof data.horimetro === "number") {
+          setHorimetro(String(data.horimetro));
         }
 
         setPreviousResponseMeta(meta);
@@ -376,6 +469,7 @@ export default function ChecklistByTagPage() {
           setPreviousError(
             "Não foi possível verificar o checklist anterior deste equipamento."
           );
+          setPeriodicityRestriction(null);
         }
       } finally {
         if (!cancelled) setPreviousLoading(false);
@@ -396,7 +490,39 @@ export default function ChecklistByTagPage() {
     setPreviousNcMap({});
     setPreviousResponseMeta(null);
     setPreviousError(null);
+    setPeriodicityRestriction(null);
+    setKm("");
+    setHorimetro("");
+    kmEditedRef.current = false;
+    horimetroEditedRef.current = false;
   }, [selectedTemplateId]);
+
+  useEffect(() => {
+    const periodicity = currentTemplate?.periodicity;
+    if (!periodicity || !periodicity.active || periodicity.anchor !== "last_submission") {
+      setPeriodicityRestriction(null);
+      return;
+    }
+
+    const createdAt = previousResponseMeta?.createdAt;
+    if (!createdAt) {
+      setPeriodicityRestriction(null);
+      return;
+    }
+
+    const lastDate = new Date(createdAt);
+    if (Number.isNaN(lastDate.getTime())) {
+      setPeriodicityRestriction(null);
+      return;
+    }
+
+    const nextAllowed = computeNextAllowedDate(periodicity, lastDate);
+    setPeriodicityRestriction({
+      lastSubmissionAt: lastDate.toISOString(),
+      nextAllowedAt: nextAllowed.toISOString(),
+      intervalLabel: formatPeriodicityInterval(periodicity),
+    });
+  }, [currentTemplate, previousResponseMeta]);
 
   /* ============================
      Helpers
@@ -413,6 +539,16 @@ export default function ChecklistByTagPage() {
       ...prev,
       [questionId]: { ...(prev[questionId] ?? { questionId }), observation: value },
     }));
+  };
+
+  const handleKmChange = (value: string) => {
+    kmEditedRef.current = true;
+    setKm(value);
+  };
+
+  const handleHorimetroChange = (value: string) => {
+    horimetroEditedRef.current = true;
+    setHorimetro(value);
   };
 
   const addPhotos = (questionId: string, fileList: FileList | null) => {
@@ -503,6 +639,22 @@ export default function ChecklistByTagPage() {
     setIsSubmitting(true);
     try {
       const { userId, nome: nomeResolved } = await validateUser();
+
+      if (periodicityRestriction) {
+        const nextAllowedDate = new Date(periodicityRestriction.nextAllowedAt);
+        if (!Number.isNaN(nextAllowedDate.getTime()) && nextAllowedDate.getTime() > Date.now()) {
+          const lastSubmissionLabel = periodicityRestriction.lastSubmissionAt
+            ? formatDateTimePtBr(new Date(periodicityRestriction.lastSubmissionAt))
+            : null;
+          const nextAllowedLabel = formatDateTimePtBr(nextAllowedDate);
+          const baseMessage = `Este checklist possui periodicidade mínima de ${periodicityRestriction.intervalLabel}.`;
+          const complement = lastSubmissionLabel
+            ? ` Último envio em ${lastSubmissionLabel}. Próximo envio liberado a partir de ${nextAllowedLabel}.`
+            : ` Próximo envio liberado a partir de ${nextAllowedLabel}.`;
+          showNotification(`${baseMessage}${complement}`, "warning");
+          return;
+        }
+      }
 
       const previousNcIds = Object.keys(previousNcMap);
       if (previousNcIds.length && previousResponseMeta) {
@@ -702,6 +854,25 @@ export default function ChecklistByTagPage() {
       ? previousChecklistDate.toLocaleString()
       : null;
 
+  const periodicityNextAllowedDate = periodicityRestriction?.nextAllowedAt
+    ? new Date(periodicityRestriction.nextAllowedAt)
+    : null;
+  const periodicityLastDate = periodicityRestriction?.lastSubmissionAt
+    ? new Date(periodicityRestriction.lastSubmissionAt)
+    : null;
+  const periodicityBlocked =
+    periodicityNextAllowedDate && !Number.isNaN(periodicityNextAllowedDate.getTime())
+      ? periodicityNextAllowedDate.getTime() > Date.now()
+      : false;
+  const periodicityLastLabel =
+    periodicityLastDate && !Number.isNaN(periodicityLastDate.getTime())
+      ? formatDateTimePtBr(periodicityLastDate)
+      : null;
+  const periodicityNextAllowedLabel =
+    periodicityNextAllowedDate && !Number.isNaN(periodicityNextAllowedDate.getTime())
+      ? formatDateTimePtBr(periodicityNextAllowedDate)
+      : null;
+
   const submitDisabled =
     !currentTemplate || userLookup.state !== "found" || !userHasAccess || isSubmitting;
 
@@ -718,6 +889,19 @@ export default function ChecklistByTagPage() {
             </code>
           </p>
         </header>
+
+        {periodicityRestriction && periodicityBlocked && (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--cor-erro-light)] p-4 text-[var(--danger)] space-y-1">
+            <p className="font-semibold">Checklist realizado recentemente</p>
+            <p className="text-sm">
+              Periodicidade mínima: {periodicityRestriction.intervalLabel}.
+              {periodicityLastLabel ? ` Último envio em ${periodicityLastLabel}.` : ""}
+              {periodicityNextAllowedLabel
+                ? ` Próximo envio liberado a partir de ${periodicityNextAllowedLabel}.`
+                : ""}
+            </p>
+          </section>
+        )}
 
         {/* Identificação */}
         <section className="rounded-xl light-card p-4 space-y-3">
@@ -774,18 +958,28 @@ export default function ChecklistByTagPage() {
               <input
                 type="number"
                 value={km}
-                onChange={(e) => setKm(e.target.value)}
+                onChange={(e) => handleKmChange(e.target.value)}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               />
+              {previousResponseMeta?.km != null && (
+                <p className="text-xs text-[var(--hint)]">
+                  Último KM registrado: {formatNumericPtBr(previousResponseMeta.km)}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-sm text-[var(--hint)]">Horímetro</label>
               <input
                 type="number"
                 value={horimetro}
-                onChange={(e) => setHorimetro(e.target.value)}
+                onChange={(e) => handleHorimetroChange(e.target.value)}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
               />
+              {previousResponseMeta?.horimetro != null && (
+                <p className="text-xs text-[var(--hint)]">
+                  Último horímetro registrado: {formatNumericPtBr(previousResponseMeta.horimetro)}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-sm text-[var(--hint)]">Tipo de checklist</label>
