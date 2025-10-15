@@ -2,7 +2,6 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Timestamp } from "firebase/firestore";
 import { useParams, useRouter } from "next/navigation";
 import {
   addDoc,
@@ -25,6 +24,7 @@ import type {
   ChecklistTemplate,
   ChecklistPhotoRule,
 } from "@/types/checklist";
+import type { UserRole } from "@/types/user";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useUserLookup } from "@/hooks/useUserLookup";
 import { useNotification } from "@/hooks/useNotification";
@@ -94,6 +94,17 @@ const getAnswerPhotoUrls = (answer?: ChecklistAnswer) => {
   if (!answer) return [] as string[];
   if (answer.photoUrls?.length) return answer.photoUrls;
   return answer.photoUrl ? [answer.photoUrl] : [];
+};
+
+const ROLE_LABEL: Record<UserRole, string> = {
+  operador: "Operador",
+  mecanico: "Mecânico",
+  admin: "Administrador",
+};
+
+const TEMPLATE_ROLE_LABEL: Record<ChecklistTemplate["type"], string> = {
+  operador: ROLE_LABEL.operador,
+  mecanico: ROLE_LABEL.mecanico,
 };
 
 /* ============================
@@ -295,6 +306,12 @@ export default function ChecklistByTagPage() {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
+  const userHasAccess = useMemo(() => {
+    if (!currentTemplate || !userInfo) return false;
+    if (userInfo.role === "admin") return true;
+    return userInfo.role === currentTemplate.type;
+  }, [currentTemplate, userInfo]);
+
   /* ============================
      Buscar último checklist
   ============================ */
@@ -460,6 +477,14 @@ export default function ChecklistByTagPage() {
       throw new Error("Informe a matrícula.");
     }
     if (!userInfo || userLookup.state !== "found" || userInfo.matricula !== trimmed) {
+      showNotification("Matrícula não cadastrada ou permitida.", "error");
+      throw new Error("Matrícula não cadastrada ou permitida.");
+    }
+    if (!currentTemplate) {
+      showNotification("Selecione um template válido.", "error");
+      throw new Error("Template inválido.");
+    }
+    if (userInfo.role !== "admin" && userInfo.role !== currentTemplate.type) {
       showNotification("Matrícula não cadastrada ou permitida.", "error");
       throw new Error("Matrícula não cadastrada ou permitida.");
     }
@@ -677,7 +702,8 @@ export default function ChecklistByTagPage() {
       ? previousChecklistDate.toLocaleString()
       : null;
 
-  const submitDisabled = !currentTemplate || userLookup.state !== "found" || isSubmitting;
+  const submitDisabled =
+    !currentTemplate || userLookup.state !== "found" || !userHasAccess || isSubmitting;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4">
@@ -716,8 +742,14 @@ export default function ChecklistByTagPage() {
               {userLookup.state === "error" && (
                 <p className="text-xs text-[var(--danger)]">{userLookup.message}</p>
               )}
-              {userLookup.state === "found" && nome && (
+              {userLookup.state === "found" && nome && userHasAccess && (
                 <p className="text-xs text-[var(--success)]">Operador encontrado.</p>
+              )}
+              {userLookup.state === "found" && nome && currentTemplate && !userHasAccess && userInfo && (
+                <p className="text-xs text-[var(--danger)]">
+                  Usuário com função {ROLE_LABEL[userInfo.role]} não possui permissão para
+                  checklists do tipo {TEMPLATE_ROLE_LABEL[currentTemplate.type]}.
+                </p>
               )}
             </div>
             <div className="space-y-1">
