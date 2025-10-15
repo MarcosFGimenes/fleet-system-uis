@@ -9,8 +9,9 @@ O checklist é acessado pelos operadores por meio de um QR Code exclusivo de cad
 - **Dados do operador**: a matrícula informada é validada na coleção `users`. Quando reconhecida, o nome e a função (por exemplo, `operador`) são preenchidos automaticamente.
 - **Dados da máquina**: o QR Code contém a `tag` cadastrada na coleção `machines`. Com ela o sistema recupera modelo, placa, setor e demais propriedades relevantes.
 - **Não conformidades pendentes**: se o checklist anterior da mesma máquina/template tiver itens marcados como "NC", eles são exibidos para confirmação de solução.
+- **Sugestão de leituras**: quilometragem e horímetro são preenchidos automaticamente com os valores registrados no checklist anterior, permitindo ajuste manual caso necessário.
 
-Leituras variáveis, como horímetro ou quilometragem, continuam sendo preenchidas manualmente pelo operador a cada envio.
+O operador pode ajustar as leituras sugeridas antes do envio caso a nova leitura seja diferente.
 
 ## Templates de Checklist (`checklistTemplates`)
 
@@ -71,13 +72,20 @@ Cada envio gera um documento contendo:
 4. Durante o envio, essa decisão gera o campo `recurrence` na resposta atual, ligando a ocorrência ao `previousResponseId` e marcando o status apropriado.
 5. Novas não conformidades (não presentes no histórico imediato) são registradas sem `recurrence` e passam a ser monitoradas a partir do próximo checklist.
 
+## Validação de Periodicidade
+
+Quando o template possui periodicidade ativa com âncora `last_submission`, o sistema verifica a data do último envio antes de permitir um novo checklist:
+
+- Caso o intervalo mínimo ainda não tenha transcorrido (ex.: menos de 1 dia para um checklist diário), o operador recebe um aviso com a data do próximo envio permitido e o envio é bloqueado.
+- A mensagem também mostra quando o último checklist foi realizado, facilitando o planejamento da próxima inspeção.
+
 ## Upload de Fotos
 
 Evidências fotográficas são enviadas ao Firebase Storage. Os arquivos são carregados (via `uploadBytes`), e seus links públicos (`getDownloadURL`) são armazenados em `photoUrls` dentro de cada resposta.
 
 ## Possíveis Extensões
 
-- **Sugestão de horímetro/KM**: aproveitar a leitura do último checklist para sugerir ou pré-preencher o valor atual.
-- **Validação de periodicidade**: utilizar `periodicity` para alertar/bloquear envios fora da janela prevista (por exemplo, impedir dois checklists no mesmo dia quando `anchor` for `last_submission`).
+- **Suporte à âncora `calendar`**: permitir que templates considerem o calendário fixo (ex.: todo dia útil) ao validar periodicidade.
+- **Alertas proativos**: disparar notificações automáticas para operadores ou gestores quando a janela de periodicidade estiver próxima do vencimento.
 
 Este resumo serve como referência rápida para manutenção e evolução do módulo de checklists integrados ao Firebase.
