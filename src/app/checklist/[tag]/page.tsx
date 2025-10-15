@@ -26,12 +26,21 @@ import type {
   ChecklistPhotoRule,
   ChecklistTemplatePeriodicity,
 } from "@/types/checklist";
+import {
+  formatDateShort,
+  getActorSnapshot,
+  getPreviousReading,
+  getTemplateActorConfig,
+  getTemplateHeader,
+  resolveDriverName,
+} from "@/lib/checklist";
 import type { UserRole } from "@/types/user";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useUserLookup } from "@/hooks/useUserLookup";
 import { useNotification } from "@/hooks/useNotification";
 import Notification from "@/components/Notification";
 import Spinner from "@/components/Spinner";
+import SignaturePad from "@/components/SignaturePad";
 
 /* ============================
    Tipagens locais
@@ -145,6 +154,22 @@ const formatNumericPtBr = (value: number): string => {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
 };
 
+const dataUrlToBlob = (dataUrl: string): Blob => {
+  const [header, data] = dataUrl.split(",");
+  if (!header || !data) {
+    throw new Error("INVALID_DATA_URL");
+  }
+  const mimeMatch = header.match(/data:(.*);base64/);
+  const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+  const binary = atob(data);
+  const length = binary.length;
+  const buffer = new Uint8Array(length);
+  for (let index = 0; index < length; index++) {
+    buffer[index] = binary.charCodeAt(index);
+  }
+  return new Blob([buffer], { type: mimeType });
+};
+
 type ChecklistResponsePayload = {
   machineId: string;
   userId: string;
@@ -157,6 +182,10 @@ type ChecklistResponsePayload = {
   km?: number;
   horimetro?: number;
   extraNonConformities?: ExtraNc[];
+  previousKm?: number | null;
+  headerFrozen?: ChecklistResponse["headerFrozen"];
+  actor?: ChecklistResponse["actor"];
+  signatures?: ChecklistResponse["signatures"];
 };
 
 const resolvePhotoRule = (
@@ -174,12 +203,14 @@ const getAnswerPhotoUrls = (answer?: ChecklistAnswer) => {
 
 const ROLE_LABEL: Record<UserRole, string> = {
   operador: "Operador",
+  motorista: "Motorista",
   mecanico: "Mecânico",
   admin: "Administrador",
 };
 
 const TEMPLATE_ROLE_LABEL: Record<ChecklistTemplate["type"], string> = {
   operador: ROLE_LABEL.operador,
+  motorista: ROLE_LABEL.motorista,
   mecanico: ROLE_LABEL.mecanico,
 };
 
@@ -274,12 +305,18 @@ export default function ChecklistByTagPage() {
   const [matricula, setMatricula] = useState("");
   const [km, setKm] = useState("");
   const [horimetro, setHorimetro] = useState("");
+  const [driverMatricula, setDriverMatricula] = useState("");
+  const [driverNome, setDriverNome] = useState("");
+
+  const [operatorSignatureDataUrl, setOperatorSignatureDataUrl] = useState<string | null>(null);
+  const [driverSignatureDataUrl, setDriverSignatureDataUrl] = useState<string | null>(null);
 
   const [answers, setAnswers] = useState<AnswerMap>({});
 
   const previewUrlsRef = useRef<Set<string>>(new Set());
   const kmEditedRef = useRef(false);
   const horimetroEditedRef = useRef(false);
+  const previousReadingRef = useRef<{ value: number | null; sourceId: string | null } | null>(null);
 
   const registerPreviewUrl = (url: string) => {
     previewUrlsRef.current.add(url);
@@ -312,6 +349,7 @@ export default function ChecklistByTagPage() {
   const [extraNcs, setExtraNcs] = useState<ExtraNc[]>([]);
   const [periodicityRestriction, setPeriodicityRestriction] =
     useState<PeriodicityRestriction | null>(null);
+  const [previousMachineReading, setPreviousMachineReading] = useState<number | null>(null);
 
   const { userLookup, userInfo, nome, setNome } = useUserLookup(matricula);
   const { notification, showNotification, hideNotification } = useNotification();
@@ -382,15 +420,48 @@ export default function ChecklistByTagPage() {
     load();
   }, [machinesCol, tag, templatesCol, setNome]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!machine) {
+      setPreviousMachineReading(null);
+      previousReadingRef.current = null;
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const fetchPreviousReading = async () => {
+      const reading = await getPreviousReading(db, machine.id);
+      if (cancelled) return;
+      setPreviousMachineReading(typeof reading.value === "number" ? reading.value : null);
+      previousReadingRef.current = reading;
+    };
+
+    void fetchPreviousReading();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [machine]);
+
   const currentTemplate = useMemo(() => {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
+  const actorConfig = useMemo(() => getTemplateActorConfig(currentTemplate), [currentTemplate]);
+  const showDriverFields = actorConfig.requireDriverField || actorConfig.kind === "mecanico";
+  const primaryActorLabel =
+    actorConfig.kind === "mecanico"
+      ? "Mecânico"
+      : actorConfig.kind === "motorista"
+      ? "Motorista"
+      : "Operador";
+
   const userHasAccess = useMemo(() => {
     if (!currentTemplate || !userInfo) return false;
     if (userInfo.role === "admin") return true;
-    return userInfo.role === currentTemplate.type;
-  }, [currentTemplate, userInfo]);
+    return userInfo.role === actorConfig.kind;
+  }, [actorConfig.kind, currentTemplate, userInfo]);
 
   /* ============================
      Buscar último checklist
@@ -495,6 +566,10 @@ export default function ChecklistByTagPage() {
     setHorimetro("");
     kmEditedRef.current = false;
     horimetroEditedRef.current = false;
+    setDriverMatricula("");
+    setDriverNome("");
+    setOperatorSignatureDataUrl(null);
+    setDriverSignatureDataUrl(null);
   }, [selectedTemplateId]);
 
   useEffect(() => {
@@ -620,7 +695,7 @@ export default function ChecklistByTagPage() {
       showNotification("Selecione um template válido.", "error");
       throw new Error("Template inválido.");
     }
-    if (userInfo.role !== "admin" && userInfo.role !== currentTemplate.type) {
+    if (userInfo.role !== "admin" && userInfo.role !== actorConfig.kind) {
       showNotification("Matrícula não cadastrada ou permitida.", "error");
       throw new Error("Matrícula não cadastrada ou permitida.");
     }
@@ -761,10 +836,122 @@ export default function ChecklistByTagPage() {
         uploadedAnswers.push(answer);
       }
 
+      if (actorConfig.requireOperatorSignature && !operatorSignatureDataUrl) {
+        showNotification(
+          `A assinatura do ${primaryActorLabel.toLowerCase()} é obrigatória.`,
+          "warning",
+        );
+        return;
+      }
+
+      if (
+        actorConfig.requireMotoristSignature &&
+        showDriverFields &&
+        !driverSignatureDataUrl
+      ) {
+        showNotification("A assinatura do motorista é obrigatória.", "warning");
+        return;
+      }
+
       const kmValue = km.trim();
       const horimetroValue = horimetro.trim();
       const matriculaValue = matricula.trim();
       const nomeValue = nomeResolved ? nomeResolved.trim() : "";
+      const driverMatriculaValue = driverMatricula.trim();
+      const driverNomeValue = driverNome.trim();
+
+      const kmNumberRaw = kmValue !== "" ? Number(kmValue) : null;
+      const kmNumber =
+        kmNumberRaw != null && !Number.isNaN(kmNumberRaw) ? kmNumberRaw : null;
+      const horimetroNumberRaw = horimetroValue !== "" ? Number(horimetroValue) : null;
+      const horimetroNumber =
+        horimetroNumberRaw != null && !Number.isNaN(horimetroNumberRaw)
+          ? horimetroNumberRaw
+          : null;
+      const readingNumber = kmNumber ?? horimetroNumber;
+
+      const previousReading =
+        previousReadingRef.current ?? (await getPreviousReading(db, machine.id));
+      previousReadingRef.current = previousReading;
+      const previousReadingValue =
+        typeof previousReading.value === "number" ? previousReading.value : null;
+
+      const driverResolvedName = resolveDriverName({
+        actorKind: actorConfig.kind,
+        formDriverName: showDriverFields ? driverNomeValue : undefined,
+        operatorUser: userInfo
+          ? { matricula: userInfo.matricula, nome: userInfo.nome }
+          : null,
+      });
+
+      const templateHeader = getTemplateHeader(currentTemplate);
+      const inspectionDateLabel = formatDateShort(new Date());
+
+      const actorSnapshot = getActorSnapshot(actorConfig.kind, {
+        mechanicMatricula: actorConfig.kind === "mecanico" ? matriculaValue : undefined,
+        mechanicNome: actorConfig.kind === "mecanico" ? nomeValue || null : undefined,
+        driverMatricula: showDriverFields ? driverMatriculaValue : undefined,
+        driverNome: showDriverFields ? driverNomeValue : undefined,
+      });
+
+      const uploadSignature = async (
+        dataUrl: string,
+        role: "operator" | "driver",
+      ) => {
+        const blob = dataUrlToBlob(dataUrl);
+        const signatureRef = ref(
+          storage,
+          `checklists/${machine.id}/${currentTemplate.id}/${uploadBatchId}/signatures/${role}.png`,
+        );
+        await uploadBytes(signatureRef, blob);
+        return getDownloadURL(signatureRef);
+      };
+
+      let operatorSignatureUrl: string | null = null;
+      if (operatorSignatureDataUrl) {
+        try {
+          operatorSignatureUrl = await uploadSignature(operatorSignatureDataUrl, "operator");
+        } catch (error) {
+          console.error("Erro ao enviar assinatura do operador", error);
+          showNotification(
+            "Não foi possível salvar a assinatura. Tente novamente.",
+            "error",
+          );
+          const uploadError = new Error("SIGNATURE_UPLOAD_ERROR");
+          uploadError.name = "SignatureUploadError";
+          throw uploadError;
+        }
+      }
+
+      let driverSignatureUrl: string | null = null;
+      if (driverSignatureDataUrl) {
+        try {
+          driverSignatureUrl = await uploadSignature(driverSignatureDataUrl, "driver");
+        } catch (error) {
+          console.error("Erro ao enviar assinatura do motorista", error);
+          showNotification(
+            "Não foi possível salvar a assinatura do motorista. Tente novamente.",
+            "error",
+          );
+          const uploadError = new Error("SIGNATURE_UPLOAD_ERROR");
+          uploadError.name = "SignatureUploadError";
+          throw uploadError;
+        }
+      }
+
+      const headerFrozen = {
+        title: currentTemplate.title,
+        foNumber: templateHeader.foNumber,
+        issueDate: templateHeader.issueDate,
+        revision: templateHeader.revision,
+        documentNumber: templateHeader.documentNumber,
+        lac: "012",
+        motorista: driverResolvedName,
+        placa: machine.placa ?? "",
+        kmAtual: typeof readingNumber === "number" ? readingNumber : null,
+        kmAnterior: previousReadingValue,
+        dataInspecao: inspectionDateLabel,
+      } satisfies NonNullable<ChecklistResponse["headerFrozen"]>;
 
       const payload: ChecklistResponsePayload = {
         machineId: machine.id,
@@ -775,15 +962,20 @@ export default function ChecklistByTagPage() {
         createdAt: new Date().toISOString(),
         createdAtTs: serverTimestamp(),
         answers: uploadedAnswers,
+        previousKm: previousReadingValue,
+        headerFrozen,
+        actor: actorSnapshot,
+        signatures: {
+          operatorUrl: operatorSignatureUrl,
+          driverUrl: driverSignatureUrl,
+        },
       };
 
-      if (kmValue !== "") {
-        const kmNumber = Number(kmValue);
-        if (!Number.isNaN(kmNumber)) payload.km = kmNumber;
+      if (kmNumber != null) {
+        payload.km = kmNumber;
       }
-      if (horimetroValue !== "") {
-        const horimetroNumber = Number(horimetroValue);
-        if (!Number.isNaN(horimetroNumber)) payload.horimetro = horimetroNumber;
+      if (horimetroNumber != null) {
+        payload.horimetro = horimetroNumber;
       }
 
       // Anexa NCs extras (se houver título preenchido)
@@ -809,10 +1001,19 @@ export default function ChecklistByTagPage() {
 
       showNotification("Checklist enviado com sucesso!", "success");
       clearAllPreviewUrls();
+      setOperatorSignatureDataUrl(null);
+      setDriverSignatureDataUrl(null);
+      setDriverMatricula("");
+      setDriverNome("");
       router.push("/login");
     } catch (error) {
       console.error(error);
-      if (!(error instanceof Error && error.name === "PhotoUploadError")) {
+      if (
+        !(
+          error instanceof Error &&
+          (error.name === "PhotoUploadError" || error.name === "SignatureUploadError")
+        )
+      ) {
         showNotification("Erro ao enviar checklist. Tente novamente.", "error");
       }
     } finally {
@@ -908,14 +1109,14 @@ export default function ChecklistByTagPage() {
           <h2 className="font-semibold">Identificação</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm text-[var(--hint)]">Matrícula</label>
+              <label className="text-sm text-[var(--hint)]">Matrícula do {primaryActorLabel.toLowerCase()}</label>
               <input
                 value={matricula}
                 onChange={(e) => setMatricula(e.target.value)}
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                 placeholder="Ex: 1001"
                 inputMode="numeric"
-                aria-label="Matrícula do operador"
+                aria-label={`Matrícula do ${primaryActorLabel.toLowerCase()}`}
               />
               {userLookup.state === "searching" && (
                 <p className="text-xs text-[var(--hint)]">Buscando matrícula…</p>
@@ -927,26 +1128,50 @@ export default function ChecklistByTagPage() {
                 <p className="text-xs text-[var(--danger)]">{userLookup.message}</p>
               )}
               {userLookup.state === "found" && nome && userHasAccess && (
-                <p className="text-xs text-[var(--success)]">Operador encontrado.</p>
+                <p className="text-xs text-[var(--success)]">{primaryActorLabel} encontrado.</p>
               )}
               {userLookup.state === "found" && nome && currentTemplate && !userHasAccess && userInfo && (
                 <p className="text-xs text-[var(--danger)]">
-                  Usuário com função {ROLE_LABEL[userInfo.role]} não possui permissão para
-                  checklists do tipo {TEMPLATE_ROLE_LABEL[currentTemplate.type]}.
+                  Usuário com função {ROLE_LABEL[userInfo.role]} não possui permissão para checklists do tipo {TEMPLATE_ROLE_LABEL[actorConfig.kind]}.
                 </p>
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-sm text-[var(--hint)]">Nome do operador</label>
+              <label className="text-sm text-[var(--hint)]">Nome do {primaryActorLabel.toLowerCase()}</label>
               <input
                 value={nome}
                 readOnly
                 className="w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-gray-600"
                 placeholder="Preenchido automaticamente"
-                aria-label="Nome do operador"
+                aria-label={`Nome do ${primaryActorLabel.toLowerCase()}`}
               />
             </div>
           </div>
+
+          {showDriverFields && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm text-[var(--hint)]">Matrícula do motorista (opcional)</label>
+                <input
+                  value={driverMatricula}
+                  onChange={(event) => setDriverMatricula(event.target.value)}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                  placeholder="Ex: 2002"
+                  aria-label="Matrícula do motorista"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm text-[var(--hint)]">Nome do motorista (opcional)</label>
+                <input
+                  value={driverNome}
+                  onChange={(event) => setDriverNome(event.target.value)}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                  placeholder="Informe o nome, se necessário"
+                  aria-label="Nome do motorista"
+                />
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Dados de operação */}
@@ -964,6 +1189,11 @@ export default function ChecklistByTagPage() {
               {previousResponseMeta?.km != null && (
                 <p className="text-xs text-[var(--hint)]">
                   Último KM registrado: {formatNumericPtBr(previousResponseMeta.km)}
+                </p>
+              )}
+              {previousMachineReading != null && (
+                <p className="text-xs text-[var(--hint)]">
+                  Última leitura da máquina: {formatNumericPtBr(previousMachineReading)}
                 </p>
               )}
             </div>
@@ -1301,6 +1531,29 @@ export default function ChecklistByTagPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Assinaturas */}
+        <section className="rounded-xl light-card p-4 space-y-4">
+          <h2 className="font-semibold">Assinaturas</h2>
+          <SignaturePad
+            label={`Assinatura do ${primaryActorLabel.toLowerCase()}`}
+            description={`Confirmar o checklist como ${primaryActorLabel.toLowerCase()}.`}
+            required={actorConfig.requireOperatorSignature}
+            onChange={setOperatorSignatureDataUrl}
+          />
+          {(showDriverFields || actorConfig.kind === "mecanico" || actorConfig.requireMotoristSignature) && (
+            <SignaturePad
+              label="Assinatura do motorista"
+              description={
+                actorConfig.kind === "mecanico"
+                  ? "Opcional – use quando houver acompanhamento do motorista."
+                  : "Assinatura do motorista responsável pelo equipamento."
+              }
+              required={actorConfig.requireMotoristSignature}
+              onChange={setDriverSignatureDataUrl}
+            />
+          )}
         </section>
 
         {/* Ações */}

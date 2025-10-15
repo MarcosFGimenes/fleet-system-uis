@@ -1,4 +1,4 @@
-﻿import type { Timestamp } from "firebase/firestore";
+import type { Timestamp } from "firebase/firestore";
 
 export type ChecklistPhotoRule = "none" | "optional" | "required_nc";
 
@@ -30,14 +30,32 @@ export interface ChecklistTemplatePeriodicity {
   active: boolean;
 }
 
+export interface ChecklistTemplateHeader {
+  foNumber: string;
+  issueDate: string;
+  revision: string;
+  documentNumber: string;
+}
+
+export type ChecklistActorKind = "operador" | "motorista" | "mecanico";
+
+export interface ChecklistTemplateActorConfig {
+  kind: ChecklistActorKind;
+  requireDriverField?: boolean;
+  requireOperatorSignature?: boolean;
+  requireMotoristSignature?: boolean;
+}
+
 export interface ChecklistTemplate {
   id: string;
-  type: "operador" | "mecanico";
+  type: ChecklistActorKind;
   title: string;
   version: number;
   isActive: boolean;
   questions: ChecklistQuestion[];
   periodicity?: ChecklistTemplatePeriodicity;
+  header?: ChecklistTemplateHeader;
+  actor?: ChecklistTemplateActorConfig;
 }
 
 export type ChecklistRecurrenceStatus = "resolved" | "still_nc";
@@ -83,6 +101,33 @@ export interface ChecklistNonConformityTreatment {
   updatedAt?: string;
 }
 
+export interface ChecklistResponseHeaderFrozen {
+  title: string;
+  foNumber: string;
+  issueDate: string;
+  revision: string;
+  documentNumber: string;
+  lac: string;
+  motorista: string;
+  placa: string;
+  kmAtual: number | null;
+  kmAnterior: number | null;
+  dataInspecao: string;
+}
+
+export interface ChecklistResponseActorSnapshot {
+  kind: ChecklistActorKind;
+  mechanicMatricula?: string | null;
+  mechanicNome?: string | null;
+  driverMatricula?: string | null;
+  driverNome?: string | null;
+}
+
+export interface ChecklistResponseSignatures {
+  operatorUrl?: string | null;
+  driverUrl?: string | null;
+}
+
 export interface ChecklistResponse {
   id: string;
   machineId: string;
@@ -97,4 +142,8 @@ export interface ChecklistResponse {
   answers: ChecklistAnswer[];
   nonConformityTreatments?: ChecklistNonConformityTreatment[];
   extraNonConformities?: ChecklistExtraNonConformity[];
+  previousKm?: number | null;
+  headerFrozen?: ChecklistResponseHeaderFrozen;
+  actor?: ChecklistResponseActorSnapshot;
+  signatures?: ChecklistResponseSignatures;
 }

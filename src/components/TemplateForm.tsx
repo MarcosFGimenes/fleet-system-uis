@@ -6,6 +6,8 @@ import {
   ChecklistPhotoRule,
   ChecklistQuestion,
   ChecklistTemplate,
+  ChecklistTemplateActorConfig,
+  ChecklistTemplateHeader,
 } from "@/types/checklist";
 
 type QuestionDraft = {
@@ -31,9 +33,34 @@ type Props = {
 
 export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [type, setType] = useState<"operador" | "mecanico">(
-    initial?.type ?? "operador"
+  const fallbackActor: ChecklistTemplateActorConfig = {
+    kind: initial?.actor?.kind ?? initial?.type ?? "operador",
+    requireDriverField: initial?.actor?.requireDriverField ?? false,
+    requireOperatorSignature: initial?.actor?.requireOperatorSignature ?? true,
+    requireMotoristSignature: initial?.actor?.requireMotoristSignature ?? false,
+  };
+
+  const fallbackHeader: ChecklistTemplateHeader = {
+    foNumber: initial?.header?.foNumber ?? "",
+    issueDate: initial?.header?.issueDate ?? "",
+    revision: initial?.header?.revision ?? "",
+    documentNumber: initial?.header?.documentNumber ?? "",
+  };
+
+  const [type, setType] = useState<ChecklistTemplate["type"]>(
+    initial?.type ?? fallbackActor.kind,
   );
+  const [actorKind, setActorKind] = useState<ChecklistTemplate["type"]>(
+    fallbackActor.kind,
+  );
+  const [requireDriverField, setRequireDriverField] = useState<boolean>(
+    fallbackActor.requireDriverField ?? false,
+  );
+  const [requireOperatorSignature, setRequireOperatorSignature] =
+    useState<boolean>(fallbackActor.requireOperatorSignature ?? true);
+  const [requireMotoristSignature, setRequireMotoristSignature] =
+    useState<boolean>(fallbackActor.requireMotoristSignature ?? false);
+  const [header, setHeader] = useState<ChecklistTemplateHeader>(fallbackHeader);
   const [version, setVersion] = useState<number>(initial?.version ?? 1);
   const [isActive, setIsActive] = useState<boolean>(initial?.isActive ?? true);
   const [questions, setQuestions] = useState<QuestionDraft[]>(() => {
@@ -93,6 +120,10 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
     setQuestions((prev) => prev.filter((q) => q.id !== id));
   };
 
+  useEffect(() => {
+    setType(actorKind);
+  }, [actorKind]);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const clean = questions
@@ -114,6 +145,20 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       }
     }
 
+    const normalizedHeader: ChecklistTemplateHeader = {
+      foNumber: header.foNumber.trim(),
+      issueDate: header.issueDate.trim(),
+      revision: header.revision.trim(),
+      documentNumber: header.documentNumber.trim(),
+    };
+
+    const normalizedActor: ChecklistTemplateActorConfig = {
+      kind: actorKind,
+      requireDriverField,
+      requireOperatorSignature,
+      requireMotoristSignature,
+    };
+
     await onSubmit({
       template: {
         title: title.trim(),
@@ -126,6 +171,8 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           photoRule: question.photoRule,
           requiresPhoto: question.photoRule === "required_nc",
         } satisfies ChecklistQuestion)),
+        header: normalizedHeader,
+        actor: normalizedActor,
       },
       periodicity: {
         active: periodicityActive,
@@ -174,11 +221,14 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           <label className="text-sm">Tipo</label>
           <select
             className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
-            value={type}
-            onChange={(event) => setType(event.target.value as "operador" | "mecanico")}
+            value={actorKind}
+            onChange={(event) =>
+              setActorKind(event.target.value as ChecklistTemplate["type"])
+            }
           >
             <option value="operador">Operador</option>
-            <option value="mecanico">Mecanico</option>
+            <option value="motorista">Motorista</option>
+            <option value="mecanico">Mecânico</option>
           </select>
         </div>
         <div>
@@ -192,6 +242,105 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           />
         </div>
       </div>
+
+      <section className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+        <header>
+          <h3 className="font-semibold">Cabeçalho do PDF</h3>
+          <p className="text-xs text-[var(--muted)]">
+            Configure os valores exibidos no topo do relatório.
+          </p>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <label className="flex flex-col gap-1 text-sm">
+            <span>FO</span>
+            <input
+              value={header.foNumber}
+              onChange={(event) =>
+                setHeader((prev) => ({ ...prev, foNumber: event.target.value }))
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+              placeholder="FO 012 050 -12"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Emissão (DD/MM/AA)</span>
+            <input
+              value={header.issueDate}
+              onChange={(event) =>
+                setHeader((prev) => ({ ...prev, issueDate: event.target.value }))
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+              placeholder="29/04/25"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Revisão (DD/MM/AA)</span>
+            <input
+              value={header.revision}
+              onChange={(event) =>
+                setHeader((prev) => ({ ...prev, revision: event.target.value }))
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+              placeholder="00/00/00"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Nº do documento</span>
+            <input
+              value={header.documentNumber}
+              onChange={(event) =>
+                setHeader((prev) => ({ ...prev, documentNumber: event.target.value }))
+              }
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+              placeholder="0"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+        <header>
+          <h3 className="font-semibold">Ator principal</h3>
+          <p className="text-xs text-[var(--muted)]">
+            Defina quem executa o checklist e quais campos adicionais devem
+            aparecer no formulário.
+          </p>
+        </header>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-blue-500"
+              checked={requireDriverField}
+              onChange={(event) => setRequireDriverField(event.target.checked)}
+            />
+            Exibir campos para motorista no formulário
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-blue-500"
+              checked={requireOperatorSignature}
+              onChange={(event) =>
+                setRequireOperatorSignature(event.target.checked)
+              }
+            />
+            Exigir assinatura do {actorKind === "mecanico" ? "mecânico" : "operador"}
+          </label>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="accent-blue-500"
+              checked={requireMotoristSignature}
+              onChange={(event) =>
+                setRequireMotoristSignature(event.target.checked)
+              }
+            />
+            Exigir assinatura do motorista
+          </label>
+        </div>
+      </section>
 
       <div className="flex items-center gap-2">
         <input
