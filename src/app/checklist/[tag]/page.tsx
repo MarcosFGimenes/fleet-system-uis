@@ -647,12 +647,11 @@ export default function ChecklistByTagPage() {
             ? formatDateTimePtBr(new Date(periodicityRestriction.lastSubmissionAt))
             : null;
           const nextAllowedLabel = formatDateTimePtBr(nextAllowedDate);
-          const baseMessage = `Este checklist possui periodicidade mínima de ${periodicityRestriction.intervalLabel}.`;
+          const baseMessage = `Este checklist possui periodicidade recomendada de ${periodicityRestriction.intervalLabel}.`;
           const complement = lastSubmissionLabel
-            ? ` Último envio em ${lastSubmissionLabel}. Próximo envio liberado a partir de ${nextAllowedLabel}.`
-            : ` Próximo envio liberado a partir de ${nextAllowedLabel}.`;
-          showNotification(`${baseMessage}${complement}`, "warning");
-          return;
+            ? ` Último envio em ${lastSubmissionLabel}. Próximo envio sugerido a partir de ${nextAllowedLabel}.`
+            : ` Próximo envio sugerido a partir de ${nextAllowedLabel}.`;
+          showNotification(`${baseMessage}${complement} O envio antecipado será registrado normalmente.`, "info");
         }
       }
 
@@ -860,7 +859,7 @@ export default function ChecklistByTagPage() {
   const periodicityLastDate = periodicityRestriction?.lastSubmissionAt
     ? new Date(periodicityRestriction.lastSubmissionAt)
     : null;
-  const periodicityBlocked =
+  const periodicityAlertActive =
     periodicityNextAllowedDate && !Number.isNaN(periodicityNextAllowedDate.getTime())
       ? periodicityNextAllowedDate.getTime() > Date.now()
       : false;
@@ -890,15 +889,16 @@ export default function ChecklistByTagPage() {
           </p>
         </header>
 
-        {periodicityRestriction && periodicityBlocked && (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--cor-erro-light)] p-4 text-[var(--danger)] space-y-1">
-            <p className="font-semibold">Checklist realizado recentemente</p>
+        {periodicityRestriction && periodicityAlertActive && (
+          <section className="rounded-xl border border-[var(--warning)]/30 bg-[var(--warning)]/10 p-4 space-y-1 text-[var(--text)]">
+            <p className="font-semibold text-[var(--warning)]">Checklist realizado recentemente</p>
             <p className="text-sm">
-              Periodicidade mínima: {periodicityRestriction.intervalLabel}.
+              Periodicidade recomendada: {periodicityRestriction.intervalLabel}.
               {periodicityLastLabel ? ` Último envio em ${periodicityLastLabel}.` : ""}
               {periodicityNextAllowedLabel
-                ? ` Próximo envio liberado a partir de ${periodicityNextAllowedLabel}.`
+                ? ` Próximo envio sugerido a partir de ${periodicityNextAllowedLabel}.`
                 : ""}
+              {" O envio antecipado será computado normalmente."}
             </p>
           </section>
         )}
