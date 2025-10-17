@@ -16,6 +16,11 @@ export default function SignaturePad({ label, onChange, required = false, descri
   const isDrawingRef = useRef(false);
   const hasStrokeRef = useRef(false);
   const [isEmpty, setIsEmpty] = useState(true);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   const resetCanvas = useCallback(
     (emitChange = false) => {
@@ -45,10 +50,10 @@ export default function SignaturePad({ label, onChange, required = false, descri
       isDrawingRef.current = false;
       setIsEmpty(true);
       if (emitChange) {
-        onChange(null);
+        onChangeRef.current(null);
       }
     },
-    [onChange],
+    [],
   );
 
   useEffect(() => {
@@ -113,7 +118,7 @@ export default function SignaturePad({ label, onChange, required = false, descri
       const canvas = canvasRef.current;
       if (!canvas) return;
       const dataUrl = canvas.toDataURL("image/png");
-      onChange(dataUrl);
+      onChangeRef.current(dataUrl);
     }
   };
 
