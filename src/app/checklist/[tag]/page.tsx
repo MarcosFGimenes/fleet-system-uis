@@ -17,7 +17,7 @@ import {
   serverTimestamp,
   where,
 } from "firebase/firestore";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { Machine } from "@/types/machine";
 import type {
   ChecklistAnswer,
@@ -36,7 +36,6 @@ import {
   resolveDriverName,
 } from "@/lib/checklist";
 import type { UserRole } from "@/types/user";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { useUserLookup } from "@/hooks/useUserLookup";
 import { useNotification } from "@/hooks/useNotification";
 import Notification from "@/components/Notification";
@@ -169,6 +168,97 @@ const dataUrlToBlob = (dataUrl: string): Blob => {
     buffer[index] = binary.charCodeAt(index);
   }
   return new Blob([buffer], { type: mimeType });
+};
+
+const sanitizeFilenameSegment = (segment: string): string => {
+  return segment.replace(/[^a-zA-Z0-9-_]/g, "-");
+};
+
+const resolveBlobExtension = (blob: Blob, fallback = "png"): string => {
+  if (typeof File !== "undefined" && blob instanceof File && typeof blob.name === "string") {
+    const extensionMatch = blob.name.match(/\.([a-zA-Z0-9]+)$/);
+    if (extensionMatch?.[1]) {
+      const normalized = extensionMatch[1].toLowerCase();
+      return normalized === "jpeg" ? "jpg" : normalized;
+    }
+  }
+  if (blob.type) {
+    const typeExtension = blob.type.split("/").pop();
+    if (typeExtension && typeExtension !== blob.type) {
+      const normalized = typeExtension.toLowerCase();
+      return normalized === "jpeg" ? "jpg" : normalized;
+    }
+  }
+  return fallback;
+};
+
+const buildImgbbFilename = (segments: string[], extension: string): string => {
+  const sanitizedSegments = segments
+    .map((segment) => sanitizeFilenameSegment(segment))
+    .filter((segment) => Boolean(segment));
+  const base = sanitizedSegments.length ? sanitizedSegments.join("-") : "upload";
+  const safeExtension = extension.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() || "png";
+  return `${base}.${safeExtension}`;
+};
+
+type ImgbbUploadResponse = {
+  data?: {
+    url?: string;
+    display_url?: string;
+    image?: {
+      url?: string;
+    };
+  };
+  success?: boolean;
+  status?: number;
+};
+
+const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise<string> => {
+  const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+  if (!apiKey) {
+    throw new Error("IMGBB_API_KEY_MISSING");
+  }
+
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_.]/g, "-");
+  const finalFilename = sanitizedFilename || "upload.png";
+  const baseName = finalFilename.replace(/\.[^./]+$/, "");
+
+  const formData = new FormData();
+  formData.append("image", image, finalFilename);
+  formData.append("name", baseName || "upload");
+
+  let response: Response;
+  try {
+    response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      body: formData,
+    });
+  } catch (networkError) {
+    console.error("Falha de rede ao enviar imagem para o ImgBB", networkError);
+    throw new Error("IMGBB_UPLOAD_NETWORK_ERROR");
+  }
+
+  let payload: ImgbbUploadResponse | null = null;
+  try {
+    payload = (await response.json()) as ImgbbUploadResponse;
+  } catch (parseError) {
+    console.error("Falha ao interpretar resposta do ImgBB", parseError);
+  }
+
+  if (!response.ok || !payload?.success) {
+    console.error("Resposta inválida do ImgBB", { status: response.status, payload });
+    throw new Error("IMGBB_UPLOAD_FAILED");
+  }
+
+  const resolvedUrl =
+    payload.data?.url || payload.data?.display_url || payload.data?.image?.url;
+
+  if (!resolvedUrl) {
+    console.error("Resposta do ImgBB sem URL", payload);
+    throw new Error("IMGBB_UPLOAD_NO_URL");
+  }
+
+  return resolvedUrl;
 };
 
 type ChecklistResponsePayload = {
@@ -890,13 +980,13 @@ export default function ChecklistByTagPage() {
         if (draftPhotos.length) {
           const photoUrls: string[] = [];
           for (const draft of draftPhotos) {
-            const storageRef = ref(
-              storage,
-              `checklists/${machine.id}/${currentTemplate.id}/${uploadBatchId}/${question.id}-${draft.id}`,
-            );
             try {
-              await uploadBytes(storageRef, draft.file);
-              const url = await getDownloadURL(storageRef);
+              const extension = resolveBlobExtension(draft.file, "jpg");
+              const filename = buildImgbbFilename(
+                [machine.id, currentTemplate.id, uploadBatchId, question.id, draft.id],
+                extension,
+              );
+              const url = await uploadImageToImgbb(draft.file, filename);
               photoUrls.push(url);
             } catch (error) {
               console.error("Erro ao enviar foto do checklist", error);
@@ -991,12 +1081,12 @@ export default function ChecklistByTagPage() {
         role: "operator" | "driver",
       ) => {
         const blob = dataUrlToBlob(dataUrl);
-        const signatureRef = ref(
-          storage,
-          `checklists/${machine.id}/${currentTemplate.id}/${uploadBatchId}/signatures/${role}.png`,
+        const extension = resolveBlobExtension(blob, "png");
+        const filename = buildImgbbFilename(
+          [machine.id, currentTemplate.id, uploadBatchId, "signatures", role],
+          extension,
         );
-        await uploadBytes(signatureRef, blob);
-        return getDownloadURL(signatureRef);
+        return uploadImageToImgbb(blob, filename);
       };
 
       let operatorSignatureUrl: string | null = null;
