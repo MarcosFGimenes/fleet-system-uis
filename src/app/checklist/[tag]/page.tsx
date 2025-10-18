@@ -386,14 +386,15 @@ export default function ChecklistByTagPage() {
 
     const loadSavedSignature = async () => {
       try {
-        const signatureDoc = await getDoc(doc(db, "userSignatures", userInfo.id));
+        const userDoc = await getDoc(doc(db, "users", userInfo.id));
         if (!active) return;
 
-        if (signatureDoc.exists()) {
-          const data = signatureDoc.data() as { dataUrl?: string | null };
-          const savedDataUrl = typeof data.dataUrl === "string" && data.dataUrl.trim()
-            ? data.dataUrl
-            : null;
+        if (userDoc.exists()) {
+          const data = userDoc.data() as { signatureDataUrl?: string | null };
+          const savedDataUrl =
+            typeof data.signatureDataUrl === "string" && data.signatureDataUrl.trim()
+              ? data.signatureDataUrl
+              : null;
 
           setOperatorSavedSignatureDataUrl(savedDataUrl);
           if (savedDataUrl) {
@@ -1017,11 +1018,11 @@ export default function ChecklistByTagPage() {
       if (shouldSaveOperatorSignature && operatorSignatureDataUrl) {
         try {
           await setDoc(
-            doc(db, "userSignatures", userId),
+            doc(db, "users", userId),
             {
-              dataUrl: operatorSignatureDataUrl,
+              signatureDataUrl: operatorSignatureDataUrl,
+              signatureUpdatedAt: serverTimestamp(),
               matricula: userInfo?.matricula ?? matriculaValue,
-              updatedAt: serverTimestamp(),
             },
             { merge: true },
           );
@@ -1197,6 +1198,45 @@ export default function ChecklistByTagPage() {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4">
       <div className="mx-auto max-w-3xl space-y-6">
+        <section className="rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 p-5 text-blue-50 shadow-sm">
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-100/80">
+              Tipo de checklist
+            </p>
+            <h2 className="text-xl font-semibold">Selecione o checklist antes de começar</h2>
+            <p className="text-sm text-blue-100/90">
+              Escolha o checklist mais adequado para a máquina antes de preencher os dados.
+            </p>
+          </div>
+
+          <div className="mt-4">
+            {templates.length > 0 ? (
+              <>
+                <label htmlFor="checklist-template" className="sr-only">
+                  Tipo de checklist
+                </label>
+                <select
+                  id="checklist-template"
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                  className="w-full rounded-full border border-white/20 bg-white/95 px-5 py-3 text-base font-semibold text-blue-900 shadow-inner transition focus:border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
+                  aria-label="Selecionar tipo de checklist"
+                >
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id} className="text-blue-900">
+                      {template.title} (v{template.version})
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <p className="rounded-full bg-white/15 px-5 py-3 text-sm font-medium text-blue-100">
+                Nenhum checklist está vinculado a esta máquina no momento.
+              </p>
+            )}
+          </div>
+        </section>
+
         {/* Cabeçalho */}
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Checklist – {machine.modelo}</h1>
@@ -1295,7 +1335,7 @@ export default function ChecklistByTagPage() {
         {/* Dados de operação */}
         <section className="rounded-xl light-card p-4 space-y-3">
           <h2 className="font-semibold">Dados da operação</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <label className="text-sm text-[var(--hint)]">KM</label>
               <input
@@ -1328,25 +1368,6 @@ export default function ChecklistByTagPage() {
                   Último horímetro registrado: {formatNumericPtBr(previousResponseMeta.horimetro)}
                 </p>
               )}
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-[var(--hint)]">Tipo de checklist</label>
-              <select
-                value={selectedTemplateId}
-                onChange={(e) => setSelectedTemplateId(e.target.value)}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
-                aria-label="Selecionar template"
-              >
-                {templates.length > 0 ? (
-                  templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.title} (v{t.version})
-                    </option>
-                  ))
-                ) : (
-                  <option>Sem templates vinculados</option>
-                )}
-              </select>
             </div>
           </div>
         </section>
