@@ -201,35 +201,19 @@ const buildImgbbFilename = (segments: string[], extension: string): string => {
   return `${base}.${safeExtension}`;
 };
 
-type ImgbbUploadResponse = {
-  data?: {
-    url?: string;
-    display_url?: string;
-    image?: {
-      url?: string;
-    };
-  };
-  success?: boolean;
-  status?: number;
-};
-
 const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise<string> => {
-  const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
-  if (!apiKey) {
-    throw new Error("IMGBB_API_KEY_MISSING");
-  }
-
   const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_.]/g, "-");
   const finalFilename = sanitizedFilename || "upload.png";
   const baseName = finalFilename.replace(/\.[^./]+$/, "");
 
   const formData = new FormData();
   formData.append("image", image, finalFilename);
+  formData.append("filename", finalFilename);
   formData.append("name", baseName || "upload");
 
   let response: Response;
   try {
-    response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
+    response = await fetch("/api/imgbb/upload", {
       method: "POST",
       body: formData,
     });
@@ -238,23 +222,23 @@ const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise
     throw new Error("IMGBB_UPLOAD_NETWORK_ERROR");
   }
 
-  let payload: ImgbbUploadResponse | null = null;
+  type UploadResponse = { url?: string; error?: string };
+  let payload: UploadResponse | null = null;
   try {
-    payload = (await response.json()) as ImgbbUploadResponse;
+    payload = (await response.json()) as UploadResponse;
   } catch (parseError) {
-    console.error("Falha ao interpretar resposta do ImgBB", parseError);
+    console.error("Falha ao interpretar resposta da API de upload", parseError);
   }
 
-  if (!response.ok || !payload?.success) {
-    console.error("Resposta inválida do ImgBB", { status: response.status, payload });
+  if (!response.ok) {
+    console.error("Resposta inválida ao enviar imagem", { status: response.status, payload });
     throw new Error("IMGBB_UPLOAD_FAILED");
   }
 
-  const resolvedUrl =
-    payload.data?.url || payload.data?.display_url || payload.data?.image?.url;
+  const resolvedUrl = payload?.url;
 
   if (!resolvedUrl) {
-    console.error("Resposta do ImgBB sem URL", payload);
+    console.error("Resposta da API de upload sem URL", payload);
     throw new Error("IMGBB_UPLOAD_NO_URL");
   }
 
