@@ -29,6 +29,16 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Environment variables
+
+Create a `.env.local` file in the project root and define the credentials used by the client-side features. For image uploads, provide your ImgBB API key (only the server needs access, so the `NEXT_PUBLIC_` prefix is not required):
+
+```bash
+IMGBB_API_KEY=your_imgbb_api_key
+```
+
+After editing `.env.local`, restart the development server so the new variables are picked up.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
