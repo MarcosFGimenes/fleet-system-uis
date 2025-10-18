@@ -386,14 +386,15 @@ export default function ChecklistByTagPage() {
 
     const loadSavedSignature = async () => {
       try {
-        const signatureDoc = await getDoc(doc(db, "userSignatures", userInfo.id));
+        const userDoc = await getDoc(doc(db, "users", userInfo.id));
         if (!active) return;
 
-        if (signatureDoc.exists()) {
-          const data = signatureDoc.data() as { dataUrl?: string | null };
-          const savedDataUrl = typeof data.dataUrl === "string" && data.dataUrl.trim()
-            ? data.dataUrl
-            : null;
+        if (userDoc.exists()) {
+          const data = userDoc.data() as { signatureDataUrl?: string | null };
+          const savedDataUrl =
+            typeof data.signatureDataUrl === "string" && data.signatureDataUrl.trim()
+              ? data.signatureDataUrl
+              : null;
 
           setOperatorSavedSignatureDataUrl(savedDataUrl);
           if (savedDataUrl) {
@@ -1017,11 +1018,11 @@ export default function ChecklistByTagPage() {
       if (shouldSaveOperatorSignature && operatorSignatureDataUrl) {
         try {
           await setDoc(
-            doc(db, "userSignatures", userId),
+            doc(db, "users", userId),
             {
-              dataUrl: operatorSignatureDataUrl,
+              signatureDataUrl: operatorSignatureDataUrl,
+              signatureUpdatedAt: serverTimestamp(),
               matricula: userInfo?.matricula ?? matriculaValue,
-              updatedAt: serverTimestamp(),
             },
             { merge: true },
           );
