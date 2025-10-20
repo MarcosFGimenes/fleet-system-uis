@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import JSZip from "jszip";
 import {
   ChecklistAnswer,
+  ChecklistQuestion,
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
@@ -94,6 +95,13 @@ const triggerDownload = (blob: Blob, filename: string) => {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
+
+const formatDatePtBr = (date: Date) =>
+  date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
 const formatAnswerResponse = (answer: ChecklistAnswer) => {
   switch (answer.response) {
@@ -677,4 +685,230 @@ export const downloadChecklistsZip = async (
   const baseName = sanitizeFilename(archiveLabel) || "checklists";
   const blob = await zip.generateAsync({ type: "blob" });
   triggerDownload(blob, `${baseName}.zip`);
+};
+
+type WeeklyTemplatePdfOptions = {
+  template: ChecklistTemplate;
+  machine: Machine;
+  startDate?: string;
+  foNumber?: string;
+};
+
+const parseWeekStart = (value?: string) => {
+  if (!value) {
+    return new Date();
+  }
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date();
+  }
+  parsed.setHours(12, 0, 0, 0);
+  return parsed;
+};
+
+const weekDayLabel = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short",
+});
+
+const weekDayDateLabel = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+});
+
+const formatWeekdayColumnLabel = (date: Date) => {
+  const weekday = weekDayLabel.format(date).replace(/\.$/, "").toUpperCase();
+  const dayMonth = weekDayDateLabel.format(date);
+  return `${weekday} ${dayMonth}`;
+};
+
+export const downloadWeeklyTemplatePdf = ({
+  template,
+  machine,
+  startDate,
+  foNumber,
+}: WeeklyTemplatePdfOptions) => {
+  const doc = new jsPDF({ orientation: "landscape" });
+  const margin = 10;
+  const lineHeight = 4.8;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const availableWidth = pageWidth - margin * 2;
+  const footerReserve = lineHeight * 11;
+
+  const baseDate = parseWeekStart(startDate);
+  const weekDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(baseDate);
+    date.setDate(baseDate.getDate() + index);
+    return date;
+  });
+
+  const firstDate = weekDates[0];
+  const lastDate = weekDates[weekDates.length - 1];
+  const weekRangeLabel = `${formatDatePtBr(firstDate)} a ${formatDatePtBr(lastDate)}`;
+
+  const minQuestionWidth = 95;
+  const minDayWidth = 26;
+  const dayColumnWidth = Math.max(
+    minDayWidth,
+    Math.floor(((availableWidth - minQuestionWidth) / 7) * 10) / 10,
+  );
+  const questionColumnWidth = Math.max(minQuestionWidth, availableWidth - dayColumnWidth * 7);
+
+  const drawPageHeader = () => {
+    let y = margin;
+    const title = template.title || "Checklist";
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(title, margin, y, { maxWidth: availableWidth });
+    y += lineHeight + 1.5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    const machineParts = [machine.modelo];
+    if (machine.placa) {
+      machineParts.push(`Placa: ${machine.placa}`);
+    }
+    const machineLabel = machineParts.join(" — ");
+    doc.text(`Máquina: ${machineLabel}`, margin, y, { maxWidth: availableWidth });
+    y += lineHeight;
+
+    doc.text(`TAG: ${machine.tag}`, margin, y);
+    y += lineHeight;
+
+    const foLabel = foNumber ? foNumber : "________________";
+    doc.text(`FO nº: ${foLabel}`, margin, y);
+    y += lineHeight;
+
+    doc.text(`Semana: ${weekRangeLabel}`, margin, y);
+    y += lineHeight + 0.5;
+
+    doc.setFontSize(9);
+    doc.text(
+      "Legenda: C = Conforme | NC = Não conforme | NA = Não se aplica",
+      margin,
+      y,
+    );
+    y += lineHeight;
+    doc.text("Preencha C, NC ou NA em cada coluna do dia correspondente.", margin, y);
+    y += lineHeight + 1.5;
+
+    return y;
+  };
+
+  const drawTableHeader = (startY: number) => {
+    const headerHeight = 16;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.rect(margin, startY, questionColumnWidth, headerHeight);
+    doc.text("Item do checklist", margin + 3, startY + headerHeight / 2 + 1.5, {
+      baseline: "middle",
+    });
+
+    weekDates.forEach((date, index) => {
+      const x = margin + questionColumnWidth + index * dayColumnWidth;
+      doc.rect(x, startY, dayColumnWidth, headerHeight);
+      const label = formatWeekdayColumnLabel(date);
+      const headerLines = [`${label}`, "Horímetro: ______"];
+      doc.setFontSize(8.5);
+      doc.text(headerLines, x + dayColumnWidth / 2, startY + 5, {
+        align: "center",
+      });
+    });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    return startY + headerHeight;
+  };
+
+  const drawQuestionRow = (startY: number, question: ChecklistQuestion, index: number) => {
+    const questionLabel = `${index + 1}. ${question.text}`;
+    const textLines = doc.splitTextToSize(questionLabel, questionColumnWidth - 6) as string[];
+    const rowPadding = 2.5;
+    const rowHeight = Math.max(textLines.length * lineHeight + rowPadding * 2, 13);
+
+    doc.setFontSize(9);
+    doc.rect(margin, startY, questionColumnWidth, rowHeight);
+    const textY = startY + rowPadding + 2;
+    textLines.forEach((line, lineIndex) => {
+      doc.text(line, margin + 3, textY + lineIndex * lineHeight);
+    });
+
+    weekDates.forEach((_, dayIndex) => {
+      const x = margin + questionColumnWidth + dayIndex * dayColumnWidth;
+      doc.rect(x, startY, dayColumnWidth, rowHeight);
+      doc.setFontSize(8);
+      doc.setTextColor(120);
+      doc.text("C / NC / NA", x + dayColumnWidth / 2, startY + rowPadding + 3, {
+        align: "center",
+      });
+      doc.setTextColor(0);
+    });
+
+    return rowHeight;
+  };
+
+  const drawFooter = (startY: number) => {
+    let y = startY;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Observações gerais:", margin, y);
+    y += lineHeight + 1;
+    for (let i = 0; i < 2; i += 1) {
+      doc.line(margin, y, pageWidth - margin, y);
+      y += lineHeight * 1.3;
+    }
+
+    y += 2;
+    doc.text(
+      "Assinatura do operador responsável: ________________________________   Data: ____/____/____",
+      margin,
+      y,
+    );
+    y += lineHeight * 1.4 + 1;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Operadores por dia:", margin, y);
+    y += lineHeight;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    weekDates.forEach((date) => {
+      const label = formatWeekdayColumnLabel(date);
+      doc.text(
+        `${label} — Operador: __________________________   Matrícula: ________________`,
+        margin,
+        y,
+      );
+      y += lineHeight;
+    });
+  };
+
+  let currentY = drawPageHeader();
+  currentY = drawTableHeader(currentY);
+
+  template.questions.forEach((question, index) => {
+    const rowHeight = drawQuestionRow(currentY, question, index);
+    const nextY = currentY + rowHeight;
+    if (nextY + footerReserve > pageHeight - margin) {
+      doc.addPage();
+      currentY = drawPageHeader();
+      currentY = drawTableHeader(currentY);
+      const retryRowHeight = drawQuestionRow(currentY, question, index);
+      currentY += retryRowHeight;
+    } else {
+      currentY = nextY;
+    }
+  });
+
+  if (currentY + footerReserve > pageHeight - margin) {
+    doc.addPage();
+    currentY = drawPageHeader();
+  }
+
+  drawFooter(currentY + lineHeight);
+
+  const machineLabel = machine.tag || machine.modelo || "checklist";
+  const weekLabel = `${formatDatePtBr(firstDate)}-a-${formatDatePtBr(lastDate)}`;
+  const filename = sanitizeFilename(`checklist-semanal-${machineLabel}-${weekLabel}`) || "checklist-semanal";
+  doc.save(`${filename}.pdf`);
 };
