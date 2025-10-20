@@ -729,12 +729,12 @@ export const downloadWeeklyTemplatePdf = ({
   foNumber,
 }: WeeklyTemplatePdfOptions) => {
   const doc = new jsPDF({ orientation: "landscape" });
-  const margin = 14;
-  const lineHeight = 6;
+  const margin = 10;
+  const lineHeight = 4.8;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const availableWidth = pageWidth - margin * 2;
-  const footerReserve = lineHeight * 9;
+  const footerReserve = lineHeight * 7;
 
   const baseDate = parseWeekStart(startDate);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -747,8 +747,8 @@ export const downloadWeeklyTemplatePdf = ({
   const lastDate = weekDates[weekDates.length - 1];
   const weekRangeLabel = `${formatDatePtBr(firstDate)} a ${formatDatePtBr(lastDate)}`;
 
-  const minQuestionWidth = 110;
-  const minDayWidth = 22;
+  const minQuestionWidth = 95;
+  const minDayWidth = 26;
   const dayColumnWidth = Math.max(
     minDayWidth,
     Math.floor(((availableWidth - minQuestionWidth) / 7) * 10) / 10,
@@ -759,12 +759,12 @@ export const downloadWeeklyTemplatePdf = ({
     let y = margin;
     const title = template.title || "Checklist";
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.text(title, margin, y, { maxWidth: availableWidth });
-    y += lineHeight + 2;
+    y += lineHeight + 1.5;
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     const machineParts = [machine.modelo];
     if (machine.placa) {
       machineParts.push(`Placa: ${machine.placa}`);
@@ -786,9 +786,9 @@ export const downloadWeeklyTemplatePdf = ({
     doc.text("Operador: __________________________   Matrícula: ________________", margin, y);
     y += lineHeight;
     doc.text("Supervisor/Encarregado: __________________________   Data: ____/____/____", margin, y);
-    y += lineHeight;
+    y += lineHeight + 0.5;
 
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.text(
       "Legenda: C = Conforme | NC = Não conforme | NA = Não se aplica",
       margin,
@@ -796,17 +796,17 @@ export const downloadWeeklyTemplatePdf = ({
     );
     y += lineHeight;
     doc.text("Preencha C, NC ou NA em cada coluna do dia correspondente.", margin, y);
-    y += lineHeight + 2;
+    y += lineHeight + 1.5;
 
     return y;
   };
 
   const drawTableHeader = (startY: number) => {
-    const headerHeight = 12;
+    const headerHeight = 16;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.rect(margin, startY, questionColumnWidth, headerHeight);
-    doc.text("Item do checklist", margin + 3, startY + headerHeight / 2 + 2, {
+    doc.text("Item do checklist", margin + 3, startY + headerHeight / 2 + 1.5, {
       baseline: "middle",
     });
 
@@ -814,38 +814,39 @@ export const downloadWeeklyTemplatePdf = ({
       const x = margin + questionColumnWidth + index * dayColumnWidth;
       doc.rect(x, startY, dayColumnWidth, headerHeight);
       const label = formatWeekdayColumnLabel(date);
-      doc.text(label, x + dayColumnWidth / 2, startY + headerHeight / 2 + 1, {
+      const headerLines = [`${label}`, "Horímetro: ______"];
+      doc.setFontSize(8.5);
+      doc.text(headerLines, x + dayColumnWidth / 2, startY + 5, {
         align: "center",
-        baseline: "middle",
       });
     });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     return startY + headerHeight;
   };
 
   const drawQuestionRow = (startY: number, question: ChecklistQuestion, index: number) => {
     const questionLabel = `${index + 1}. ${question.text}`;
-    const lines = doc.splitTextToSize(questionLabel, questionColumnWidth - 6) as string[];
-    const rowHeight = Math.max(lines.length * lineHeight + 4, 18);
+    const textLines = doc.splitTextToSize(questionLabel, questionColumnWidth - 6) as string[];
+    const rowPadding = 2.5;
+    const rowHeight = Math.max(textLines.length * lineHeight + rowPadding * 2, 13);
 
+    doc.setFontSize(9);
     doc.rect(margin, startY, questionColumnWidth, rowHeight);
-    const textY = startY + 5;
-    lines.forEach((line, lineIndex) => {
+    const textY = startY + rowPadding + 2;
+    textLines.forEach((line, lineIndex) => {
       doc.text(line, margin + 3, textY + lineIndex * lineHeight);
     });
 
     weekDates.forEach((_, dayIndex) => {
       const x = margin + questionColumnWidth + dayIndex * dayColumnWidth;
       doc.rect(x, startY, dayColumnWidth, rowHeight);
-      doc.setFontSize(9);
+      doc.setFontSize(8);
       doc.setTextColor(120);
-      doc.text("C / NC / NA", x + dayColumnWidth / 2, startY + rowHeight / 2, {
+      doc.text("C / NC / NA", x + dayColumnWidth / 2, startY + rowPadding + 3, {
         align: "center",
-        baseline: "middle",
       });
       doc.setTextColor(0);
-      doc.setFontSize(10);
     });
 
     return rowHeight;
@@ -854,12 +855,12 @@ export const downloadWeeklyTemplatePdf = ({
   const drawFooter = (startY: number) => {
     let y = startY;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.text("Observações gerais:", margin, y);
-    y += lineHeight;
-    for (let i = 0; i < 3; i += 1) {
+    y += lineHeight + 1;
+    for (let i = 0; i < 2; i += 1) {
       doc.line(margin, y, pageWidth - margin, y);
-      y += lineHeight * 1.2;
+      y += lineHeight * 1.3;
     }
 
     y += 2;
@@ -868,7 +869,7 @@ export const downloadWeeklyTemplatePdf = ({
       margin,
       y,
     );
-    y += lineHeight * 1.5;
+    y += lineHeight * 1.4;
     doc.text(
       "Assinatura do supervisor: ______________________________   Data: ____/____/____",
       margin,
