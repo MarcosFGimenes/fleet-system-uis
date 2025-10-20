@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import JSZip from "jszip";
 import {
   ChecklistAnswer,
+  ChecklistQuestion,
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
@@ -690,6 +691,7 @@ type WeeklyTemplatePdfOptions = {
   template: ChecklistTemplate;
   machine: Machine;
   startDate?: string;
+  foNumber?: string;
 };
 
 const parseWeekStart = (value?: string) => {
@@ -705,135 +707,201 @@ const parseWeekStart = (value?: string) => {
   return parsed;
 };
 
-const renderWeeklyDayHeader = (
-  doc: jsPDF,
-  params: {
-    template: ChecklistTemplate;
-    machine: Machine;
-    date: Date;
-    dayIndex: number;
-    continued?: boolean;
-  },
-) => {
-  const { template, machine, date, dayIndex, continued } = params;
-  const margin = 14;
-  const lineHeight = 6;
-  const pageWidth = doc.internal.pageSize.getWidth();
+const weekDayLabel = new Intl.DateTimeFormat("pt-BR", {
+  weekday: "short",
+});
 
-  let y = margin;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(template.title || "Checklist", margin, y, { maxWidth: pageWidth - margin * 2 });
-  y += lineHeight;
+const weekDayDateLabel = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+});
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  const machineLabelParts = [machine.modelo];
-  if (machine.placa) {
-    machineLabelParts.push(`Placa: ${machine.placa}`);
-  }
-  doc.text(`Máquina: ${machineLabelParts.join(" — ")}`, margin, y, {
-    maxWidth: pageWidth - margin * 2,
-  });
-  y += lineHeight;
-
-  doc.text(`TAG: ${machine.tag}`, margin, y);
-  y += lineHeight;
-
-  const dayLabel = continued
-    ? `Dia ${dayIndex + 1} (continuação) — ${formatDatePtBr(date)}`
-    : `Dia ${dayIndex + 1} — ${formatDatePtBr(date)}`;
-  doc.text(dayLabel, margin, y);
-  y += lineHeight * 1.5;
-
-  doc.setFont("helvetica", "bold");
-  doc.text("Perguntas do checklist", margin, y);
-  y += lineHeight;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-
-  return y;
+const formatWeekdayColumnLabel = (date: Date) => {
+  const weekday = weekDayLabel.format(date).replace(/\.$/, "").toUpperCase();
+  const dayMonth = weekDayDateLabel.format(date);
+  return `${weekday} ${dayMonth}`;
 };
 
 export const downloadWeeklyTemplatePdf = ({
   template,
   machine,
   startDate,
+  foNumber,
 }: WeeklyTemplatePdfOptions) => {
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation: "landscape" });
   const margin = 14;
   const lineHeight = 6;
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const baseDate = parseWeekStart(startDate);
+  const availableWidth = pageWidth - margin * 2;
+  const footerReserve = lineHeight * 9;
 
+  const baseDate = parseWeekStart(startDate);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(baseDate);
     date.setDate(baseDate.getDate() + index);
     return date;
   });
 
-  const ensureSpace = (currentY: number, neededLines: number, render: (continued: boolean) => number) => {
-    if (currentY + neededLines * lineHeight <= pageHeight - margin) {
-      return currentY;
-    }
-    doc.addPage();
-    return render(true);
-  };
-
-  weekDates.forEach((date, dayIndex) => {
-    let y = dayIndex === 0
-      ? renderWeeklyDayHeader(doc, { template, machine, date, dayIndex })
-      : (() => {
-          doc.addPage();
-          return renderWeeklyDayHeader(doc, { template, machine, date, dayIndex });
-        })();
-
-    template.questions.forEach((question, questionIndex) => {
-      const questionNumber = `${questionIndex + 1}. ${question.text}`;
-      const wrappedQuestion = doc.splitTextToSize(questionNumber, pageWidth - margin * 2);
-      const requiredLines = wrappedQuestion.length + 5;
-      y = ensureSpace(y, requiredLines, (continued) =>
-        renderWeeklyDayHeader(doc, { template, machine, date, dayIndex, continued }),
-      );
-
-      doc.text(wrappedQuestion, margin, y);
-      y += wrappedQuestion.length * lineHeight;
-
-      doc.text("☐ Conforme   ☐ Não conforme   ☐ Não se aplica", margin, y);
-      y += lineHeight;
-
-      doc.text("Observações:", margin, y);
-      y += lineHeight;
-      doc.line(margin, y, pageWidth - margin, y);
-      y += lineHeight * 1.2;
-      doc.line(margin, y, pageWidth - margin, y);
-      y += lineHeight * 1.2;
-    });
-
-    y = ensureSpace(y, 8, (continued) =>
-      renderWeeklyDayHeader(doc, { template, machine, date, dayIndex, continued }),
-    );
-
-    doc.text("Ocorrências adicionais:", margin, y);
-    y += lineHeight;
-    doc.line(margin, y, pageWidth - margin, y);
-    y += lineHeight * 1.2;
-    doc.line(margin, y, pageWidth - margin, y);
-    y += lineHeight * 1.2;
-    doc.line(margin, y, pageWidth - margin, y);
-    y += lineHeight * 1.5;
-
-    doc.text("Assinatura do responsável: ________________________________", margin, y);
-    y += lineHeight * 1.5;
-    doc.text("Data de preenchimento: ____/____/____", margin, y);
-  });
-
   const firstDate = weekDates[0];
   const lastDate = weekDates[weekDates.length - 1];
-  const weekLabel = `${formatDatePtBr(firstDate)}-a-${formatDatePtBr(lastDate)}`;
+  const weekRangeLabel = `${formatDatePtBr(firstDate)} a ${formatDatePtBr(lastDate)}`;
+
+  const minQuestionWidth = 110;
+  const minDayWidth = 22;
+  const dayColumnWidth = Math.max(
+    minDayWidth,
+    Math.floor(((availableWidth - minQuestionWidth) / 7) * 10) / 10,
+  );
+  const questionColumnWidth = Math.max(minQuestionWidth, availableWidth - dayColumnWidth * 7);
+
+  const drawPageHeader = () => {
+    let y = margin;
+    const title = template.title || "Checklist";
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text(title, margin, y, { maxWidth: availableWidth });
+    y += lineHeight + 2;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    const machineParts = [machine.modelo];
+    if (machine.placa) {
+      machineParts.push(`Placa: ${machine.placa}`);
+    }
+    const machineLabel = machineParts.join(" — ");
+    doc.text(`Máquina: ${machineLabel}`, margin, y, { maxWidth: availableWidth });
+    y += lineHeight;
+
+    doc.text(`TAG: ${machine.tag}`, margin, y);
+    y += lineHeight;
+
+    const foLabel = foNumber ? foNumber : "________________";
+    doc.text(`FO nº: ${foLabel}`, margin, y);
+    y += lineHeight;
+
+    doc.text(`Semana: ${weekRangeLabel}`, margin, y);
+    y += lineHeight;
+
+    doc.text("Operador: __________________________   Matrícula: ________________", margin, y);
+    y += lineHeight;
+    doc.text("Supervisor/Encarregado: __________________________   Data: ____/____/____", margin, y);
+    y += lineHeight;
+
+    doc.setFontSize(10);
+    doc.text(
+      "Legenda: C = Conforme | NC = Não conforme | NA = Não se aplica",
+      margin,
+      y,
+    );
+    y += lineHeight;
+    doc.text("Preencha C, NC ou NA em cada coluna do dia correspondente.", margin, y);
+    y += lineHeight + 2;
+
+    return y;
+  };
+
+  const drawTableHeader = (startY: number) => {
+    const headerHeight = 12;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.rect(margin, startY, questionColumnWidth, headerHeight);
+    doc.text("Item do checklist", margin + 3, startY + headerHeight / 2 + 2, {
+      baseline: "middle",
+    });
+
+    weekDates.forEach((date, index) => {
+      const x = margin + questionColumnWidth + index * dayColumnWidth;
+      doc.rect(x, startY, dayColumnWidth, headerHeight);
+      const label = formatWeekdayColumnLabel(date);
+      doc.text(label, x + dayColumnWidth / 2, startY + headerHeight / 2 + 1, {
+        align: "center",
+        baseline: "middle",
+      });
+    });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    return startY + headerHeight;
+  };
+
+  const drawQuestionRow = (startY: number, question: ChecklistQuestion, index: number) => {
+    const questionLabel = `${index + 1}. ${question.text}`;
+    const lines = doc.splitTextToSize(questionLabel, questionColumnWidth - 6) as string[];
+    const rowHeight = Math.max(lines.length * lineHeight + 4, 18);
+
+    doc.rect(margin, startY, questionColumnWidth, rowHeight);
+    const textY = startY + 5;
+    lines.forEach((line, lineIndex) => {
+      doc.text(line, margin + 3, textY + lineIndex * lineHeight);
+    });
+
+    weekDates.forEach((_, dayIndex) => {
+      const x = margin + questionColumnWidth + dayIndex * dayColumnWidth;
+      doc.rect(x, startY, dayColumnWidth, rowHeight);
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text("C / NC / NA", x + dayColumnWidth / 2, startY + rowHeight / 2, {
+        align: "center",
+        baseline: "middle",
+      });
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+    });
+
+    return rowHeight;
+  };
+
+  const drawFooter = (startY: number) => {
+    let y = startY;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Observações gerais:", margin, y);
+    y += lineHeight;
+    for (let i = 0; i < 3; i += 1) {
+      doc.line(margin, y, pageWidth - margin, y);
+      y += lineHeight * 1.2;
+    }
+
+    y += 2;
+    doc.text(
+      "Assinatura do operador: ________________________________   Data: ____/____/____",
+      margin,
+      y,
+    );
+    y += lineHeight * 1.5;
+    doc.text(
+      "Assinatura do supervisor: ______________________________   Data: ____/____/____",
+      margin,
+      y,
+    );
+  };
+
+  let currentY = drawPageHeader();
+  currentY = drawTableHeader(currentY);
+
+  template.questions.forEach((question, index) => {
+    const rowHeight = drawQuestionRow(currentY, question, index);
+    const nextY = currentY + rowHeight;
+    if (nextY + footerReserve > pageHeight - margin) {
+      doc.addPage();
+      currentY = drawPageHeader();
+      currentY = drawTableHeader(currentY);
+      const retryRowHeight = drawQuestionRow(currentY, question, index);
+      currentY += retryRowHeight;
+    } else {
+      currentY = nextY;
+    }
+  });
+
+  if (currentY + footerReserve > pageHeight - margin) {
+    doc.addPage();
+    currentY = drawPageHeader();
+  }
+
+  drawFooter(currentY + lineHeight);
+
   const machineLabel = machine.tag || machine.modelo || "checklist";
+  const weekLabel = `${formatDatePtBr(firstDate)}-a-${formatDatePtBr(lastDate)}`;
   const filename = sanitizeFilename(`checklist-semanal-${machineLabel}-${weekLabel}`) || "checklist-semanal";
   doc.save(`${filename}.pdf`);
 };

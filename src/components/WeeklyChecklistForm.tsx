@@ -120,6 +120,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [templateId, setTemplateId] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(resolveDefaultStartDate());
+  const [foNumber, setFoNumber] = useState<string>("");
   const [operatorMatricula, setOperatorMatricula] = useState("");
   const [operatorNome, setOperatorNome] = useState("");
   const [driverMatricula, setDriverMatricula] = useState("");
@@ -247,7 +248,12 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
       alert("Selecione um template para baixar o PDF semanal.");
       return;
     }
-    downloadWeeklyTemplatePdf({ template: selectedTemplate, machine, startDate });
+    downloadWeeklyTemplatePdf({
+      template: selectedTemplate,
+      machine,
+      startDate,
+      foNumber: foNumber.trim(),
+    });
   };
 
   const validateForm = () => {
@@ -461,6 +467,20 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
             onChange={(event) => setStartDate(event.target.value)}
             className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
           />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
+          Número da FO para impressão
+          <input
+            type="text"
+            value={foNumber}
+            onChange={(event) => setFoNumber(event.target.value)}
+            placeholder="Informe para personalizar o PDF"
+            className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--primary)] focus:outline-none"
+          />
+          <span className="text-xs font-normal text-[var(--muted)]">
+            O número informado aparece no cabeçalho do checklist semanal impresso.
+          </span>
         </label>
       </div>
 
