@@ -734,7 +734,7 @@ export const downloadWeeklyTemplatePdf = ({
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const availableWidth = pageWidth - margin * 2;
-  const footerReserve = lineHeight * 7;
+  const footerReserve = lineHeight * 11;
 
   const baseDate = parseWeekStart(startDate);
   const weekDates = Array.from({ length: 7 }, (_, index) => {
@@ -781,11 +781,6 @@ export const downloadWeeklyTemplatePdf = ({
     y += lineHeight;
 
     doc.text(`Semana: ${weekRangeLabel}`, margin, y);
-    y += lineHeight;
-
-    doc.text("Operador: __________________________   Matrícula: ________________", margin, y);
-    y += lineHeight;
-    doc.text("Supervisor/Encarregado: __________________________   Data: ____/____/____", margin, y);
     y += lineHeight + 0.5;
 
     doc.setFontSize(9);
@@ -865,16 +860,27 @@ export const downloadWeeklyTemplatePdf = ({
 
     y += 2;
     doc.text(
-      "Assinatura do operador: ________________________________   Data: ____/____/____",
+      "Assinatura do operador responsável: ________________________________   Data: ____/____/____",
       margin,
       y,
     );
-    y += lineHeight * 1.4;
-    doc.text(
-      "Assinatura do supervisor: ______________________________   Data: ____/____/____",
-      margin,
-      y,
-    );
+    y += lineHeight * 1.4 + 1;
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Operadores por dia:", margin, y);
+    y += lineHeight;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    weekDates.forEach((date) => {
+      const label = formatWeekdayColumnLabel(date);
+      doc.text(
+        `${label} — Operador: __________________________   Matrícula: ________________`,
+        margin,
+        y,
+      );
+      y += lineHeight;
+    });
   };
 
   let currentY = drawPageHeader();
