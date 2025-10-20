@@ -14,9 +14,10 @@ import {
 import { Machine } from "@/types/machine";
 import MachineForm from "@/components/MachineForm";
 import QrCodeGenerator from "@/components/QrCodeGenerator";
+import WeeklyChecklistForm from "@/components/WeeklyChecklistForm";
 
 type UiState = {
-  mode: "list" | "create" | "edit" | "qr";
+  mode: "list" | "create" | "edit" | "qr" | "weekly";
   selected?: Machine | null;
 };
 
@@ -149,6 +150,13 @@ export default function MachinesAdminPage() {
         </section>
       )}
 
+      {ui.mode === "weekly" && ui.selected && (
+        <WeeklyChecklistForm
+          machine={ui.selected}
+          onCancel={() => setUi({ mode: "list" })}
+        />
+      )}
+
       {ui.mode === "list" && (
         <section className="light-card overflow-hidden">
           <div className="overflow-x-auto">
@@ -183,6 +191,12 @@ export default function MachinesAdminPage() {
                           className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--primary-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
                         >
                           Templates
+                        </button>
+                        <button
+                          onClick={() => setUi({ mode: "weekly", selected: machine })}
+                          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--primary-50)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+                        >
+                          Checklist semanal
                         </button>
                         <button
                           onClick={() => setUi({ mode: "qr", selected: machine })}

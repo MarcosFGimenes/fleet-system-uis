@@ -95,6 +95,13 @@ const triggerDownload = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+const formatDatePtBr = (date: Date) =>
+  date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
 const formatAnswerResponse = (answer: ChecklistAnswer) => {
   switch (answer.response) {
     case "ok":
@@ -677,4 +684,156 @@ export const downloadChecklistsZip = async (
   const baseName = sanitizeFilename(archiveLabel) || "checklists";
   const blob = await zip.generateAsync({ type: "blob" });
   triggerDownload(blob, `${baseName}.zip`);
+};
+
+type WeeklyTemplatePdfOptions = {
+  template: ChecklistTemplate;
+  machine: Machine;
+  startDate?: string;
+};
+
+const parseWeekStart = (value?: string) => {
+  if (!value) {
+    return new Date();
+  }
+  const normalized = value.includes("T") ? value : `${value}T00:00:00`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date();
+  }
+  parsed.setHours(12, 0, 0, 0);
+  return parsed;
+};
+
+const renderWeeklyDayHeader = (
+  doc: jsPDF,
+  params: {
+    template: ChecklistTemplate;
+    machine: Machine;
+    date: Date;
+    dayIndex: number;
+    continued?: boolean;
+  },
+) => {
+  const { template, machine, date, dayIndex, continued } = params;
+  const margin = 14;
+  const lineHeight = 6;
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  let y = margin;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text(template.title || "Checklist", margin, y, { maxWidth: pageWidth - margin * 2 });
+  y += lineHeight;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  const machineLabelParts = [machine.modelo];
+  if (machine.placa) {
+    machineLabelParts.push(`Placa: ${machine.placa}`);
+  }
+  doc.text(`Máquina: ${machineLabelParts.join(" — ")}`, margin, y, {
+    maxWidth: pageWidth - margin * 2,
+  });
+  y += lineHeight;
+
+  doc.text(`TAG: ${machine.tag}`, margin, y);
+  y += lineHeight;
+
+  const dayLabel = continued
+    ? `Dia ${dayIndex + 1} (continuação) — ${formatDatePtBr(date)}`
+    : `Dia ${dayIndex + 1} — ${formatDatePtBr(date)}`;
+  doc.text(dayLabel, margin, y);
+  y += lineHeight * 1.5;
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Perguntas do checklist", margin, y);
+  y += lineHeight;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  return y;
+};
+
+export const downloadWeeklyTemplatePdf = ({
+  template,
+  machine,
+  startDate,
+}: WeeklyTemplatePdfOptions) => {
+  const doc = new jsPDF();
+  const margin = 14;
+  const lineHeight = 6;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const baseDate = parseWeekStart(startDate);
+
+  const weekDates = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(baseDate);
+    date.setDate(baseDate.getDate() + index);
+    return date;
+  });
+
+  const ensureSpace = (currentY: number, neededLines: number, render: (continued: boolean) => number) => {
+    if (currentY + neededLines * lineHeight <= pageHeight - margin) {
+      return currentY;
+    }
+    doc.addPage();
+    return render(true);
+  };
+
+  weekDates.forEach((date, dayIndex) => {
+    let y = dayIndex === 0
+      ? renderWeeklyDayHeader(doc, { template, machine, date, dayIndex })
+      : (() => {
+          doc.addPage();
+          return renderWeeklyDayHeader(doc, { template, machine, date, dayIndex });
+        })();
+
+    template.questions.forEach((question, questionIndex) => {
+      const questionNumber = `${questionIndex + 1}. ${question.text}`;
+      const wrappedQuestion = doc.splitTextToSize(questionNumber, pageWidth - margin * 2);
+      const requiredLines = wrappedQuestion.length + 5;
+      y = ensureSpace(y, requiredLines, (continued) =>
+        renderWeeklyDayHeader(doc, { template, machine, date, dayIndex, continued }),
+      );
+
+      doc.text(wrappedQuestion, margin, y);
+      y += wrappedQuestion.length * lineHeight;
+
+      doc.text("☐ Conforme   ☐ Não conforme   ☐ Não se aplica", margin, y);
+      y += lineHeight;
+
+      doc.text("Observações:", margin, y);
+      y += lineHeight;
+      doc.line(margin, y, pageWidth - margin, y);
+      y += lineHeight * 1.2;
+      doc.line(margin, y, pageWidth - margin, y);
+      y += lineHeight * 1.2;
+    });
+
+    y = ensureSpace(y, 8, (continued) =>
+      renderWeeklyDayHeader(doc, { template, machine, date, dayIndex, continued }),
+    );
+
+    doc.text("Ocorrências adicionais:", margin, y);
+    y += lineHeight;
+    doc.line(margin, y, pageWidth - margin, y);
+    y += lineHeight * 1.2;
+    doc.line(margin, y, pageWidth - margin, y);
+    y += lineHeight * 1.2;
+    doc.line(margin, y, pageWidth - margin, y);
+    y += lineHeight * 1.5;
+
+    doc.text("Assinatura do responsável: ________________________________", margin, y);
+    y += lineHeight * 1.5;
+    doc.text("Data de preenchimento: ____/____/____", margin, y);
+  });
+
+  const firstDate = weekDates[0];
+  const lastDate = weekDates[weekDates.length - 1];
+  const weekLabel = `${formatDatePtBr(firstDate)}-a-${formatDatePtBr(lastDate)}`;
+  const machineLabel = machine.tag || machine.modelo || "checklist";
+  const filename = sanitizeFilename(`checklist-semanal-${machineLabel}-${weekLabel}`) || "checklist-semanal";
+  doc.save(`${filename}.pdf`);
 };
