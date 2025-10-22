@@ -8,13 +8,21 @@ const fetchMock = vi.fn();
 const pushMock = vi.fn();
 const replaceMock = vi.fn();
 
+type GlobalWithOptionalCrypto = typeof globalThis & {
+  crypto?: Crypto & { randomUUID?: () => string };
+};
+
+const globalWithOptionalCrypto = globalThis as GlobalWithOptionalCrypto;
+
 (globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
 
 beforeAll(() => {
-  if (typeof globalThis.crypto === "undefined") {
-    (globalThis as any).crypto = { randomUUID: () => "uuid" };
-  } else if (typeof globalThis.crypto.randomUUID === "undefined") {
-    (globalThis.crypto as Crypto).randomUUID = () => "uuid";
+  if (!globalWithOptionalCrypto.crypto) {
+    globalWithOptionalCrypto.crypto = {
+      randomUUID: () => "uuid",
+    } as Crypto & { randomUUID: () => string };
+  } else if (!globalWithOptionalCrypto.crypto.randomUUID) {
+    globalWithOptionalCrypto.crypto.randomUUID = () => "uuid";
   }
 });
 
@@ -36,6 +44,16 @@ vi.mock("@/components/ui/KpiTile", () => ({
   ),
 }));
 
+type MockTableRecord = Record<string, unknown> & {
+  id: string;
+  title?: string | null;
+};
+
+type MockTableColumn = {
+  key: string;
+  render?: (record: MockTableRecord) => React.ReactNode;
+};
+
 vi.mock("@/components/ui/DataTable", () => ({
   default: ({
     data,
@@ -44,10 +62,10 @@ vi.mock("@/components/ui/DataTable", () => ({
     onRowClick,
     filters,
   }: {
-    data: any[];
+    data: MockTableRecord[];
     isLoading: boolean;
-    columns?: { key: string; render?: (record: any) => React.ReactNode }[];
-    onRowClick?: (record: any) => void;
+    columns?: MockTableColumn[];
+    onRowClick?: (record: MockTableRecord) => void;
     filters?: React.ReactNode;
   }) => (
     <div>
