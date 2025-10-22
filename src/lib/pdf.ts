@@ -15,6 +15,8 @@ import {
   formatDateShort,
   getTemplateActorConfig,
   getTemplateHeader,
+  resolvePrimaryActorLabel,
+  resolveSecondaryActorLabel,
 } from "@/lib/checklist";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -180,12 +182,13 @@ type HeaderSnapshot = {
 
 const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
   const { response, template, machine } = detail;
+  const fallbackKind = resolveMachineActorKind(machine);
+  const actorConfig = getTemplateActorConfig(template, { fallbackKind });
   const machineActorLabel = resolveMachineActorLabel(machine);
-  const actorKind = resolveActorKind(detail);
-  const secondaryActorLabel =
-    actorKind === "mecanico" || actorKind === "motorista"
-      ? "Motorista"
-      : machineActorLabel;
+  const secondaryActorLabel = resolveSecondaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
   if (response.headerFrozen) {
     const frozen = response.headerFrozen;
     return {
@@ -205,8 +208,6 @@ const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
   }
 
   const templateHeader = getTemplateHeader(template);
-  const fallbackKind = resolveMachineActorKind(machine);
-  const actorConfig = getTemplateActorConfig(template, { fallbackKind });
   const parsedDate = parseResponseDate(response.createdAt) ?? new Date();
   const readingValue =
     typeof response.km === "number"
@@ -387,13 +388,8 @@ const appendChecklistToDoc = async (
 
   const renderSignatureSection = async () => {
     const blocks: SignatureBlock[] = [];
-    const primaryActorLabel = resolveMachineActorLabel(machine);
-    const actorLabel =
-      actorKind === "mecanico"
-        ? "Mecânico"
-        : actorKind === "motorista"
-        ? "Motorista"
-        : primaryActorLabel;
+    const machineActorLabel = resolveMachineActorLabel(machine);
+    const primaryActorLabel = resolvePrimaryActorLabel(actorKind, machineActorLabel);
 
     const operatorMatricula =
       actorKind === "mecanico"
@@ -405,7 +401,7 @@ const appendChecklistToDoc = async (
         : response.operatorNome ?? "";
 
     blocks.push({
-      label: `Assinatura do ${actorLabel.toLowerCase()}`,
+      label: `Assinatura do ${primaryActorLabel.toLowerCase()}`,
       matricula: operatorMatricula,
       nome: operatorNome ?? "",
       signatureUrl: response.signatures?.operatorUrl ?? null,
@@ -582,12 +578,8 @@ const appendChecklistToDoc = async (
   addParagraph(`Emitido em: ${dateTimeFormatter.format(new Date(response.createdAt))}`);
 
   if (response.operatorNome || response.operatorMatricula) {
-    const actorLabel =
-      actorKind === "mecanico"
-        ? "Mecânico"
-        : actorKind === "motorista"
-        ? "Motorista"
-        : resolveMachineActorLabel(machine);
+    const machineActorLabel = resolveMachineActorLabel(machine);
+    const actorLabel = resolvePrimaryActorLabel(actorKind, machineActorLabel);
     const actorName = response.operatorNome ? response.operatorNome : "Não informado";
     const matriculaLabel = response.operatorMatricula ? ` (Mat. ${response.operatorMatricula})` : "";
     addParagraph(`${actorLabel}: ${actorName}${matriculaLabel}`);
@@ -654,10 +646,12 @@ const appendChecklistToDoc = async (
     }
 
     if (answer.recurrence) {
+      const machineActorLabel = resolveMachineActorLabel(machine);
+      const resolvedLabel = resolvePrimaryActorLabel(actorKind, machineActorLabel);
       const recurrenceLabel =
         answer.recurrence.status === "still_nc"
           ? "Permanece em não conformidade"
-          : `${resolveMachineActorLabel(machine)} informou que a não conformidade foi resolvida`;
+          : `${resolvedLabel} informou que a não conformidade foi resolvida`;
       addParagraph(`Reincidência: ${recurrenceLabel}`);
     }
     addParagraph("", { spacing: 2 });
@@ -777,7 +771,10 @@ export const downloadWeeklyTemplatePdf = ({
   const firstDate = weekDates[0];
   const lastDate = weekDates[weekDates.length - 1];
   const weekRangeLabel = `${formatDatePtBr(firstDate)} a ${formatDatePtBr(lastDate)}`;
-  const primaryActorLabel = resolveMachineActorLabel(machine);
+  const fallbackKind = resolveMachineActorKind(machine);
+  const actorConfig = getTemplateActorConfig(template, { fallbackKind });
+  const machineActorLabel = resolveMachineActorLabel(machine);
+  const primaryActorLabel = resolvePrimaryActorLabel(actorConfig.kind, machineActorLabel);
   const primaryActorLower = primaryActorLabel.toLowerCase();
   const primaryActorPlural =
     primaryActorLabel === "Operador" ? "Operadores" : `${primaryActorLabel}s`;

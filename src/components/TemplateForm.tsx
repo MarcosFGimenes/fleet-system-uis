@@ -47,9 +47,6 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
     documentNumber: initial?.header?.documentNumber ?? "",
   };
 
-  const [type, setType] = useState<ChecklistTemplate["type"]>(
-    initial?.type ?? fallbackActor.kind,
-  );
   const [actorKind, setActorKind] = useState<ChecklistTemplate["type"]>(
     fallbackActor.kind,
   );
@@ -130,10 +127,6 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
     setQuestions((prev) => prev.filter((q) => q.id !== id));
   };
 
-  useEffect(() => {
-    setType(actorKind);
-  }, [actorKind]);
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const clean = questions
@@ -172,7 +165,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
     await onSubmit({
       template: {
         title: title.trim(),
-        type,
+        type: actorKind,
         version,
         isActive,
         questions: clean.map((question) => ({
@@ -217,7 +210,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="md:col-span-2">
           <label className="text-sm">Titulo</label>
           <input
@@ -226,20 +219,6 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
             onChange={(event) => setTitle(event.target.value)}
             placeholder={`Checklist diário ${actorKindLabel.toLowerCase()}`}
           />
-        </div>
-        <div>
-          <label className="text-sm">Tipo</label>
-          <select
-            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
-            value={actorKind}
-            onChange={(event) =>
-              setActorKind(event.target.value as ChecklistTemplate["type"])
-            }
-          >
-            <option value="operador">Operador</option>
-            <option value="motorista">Motorista</option>
-            <option value="mecanico">Mecânico</option>
-          </select>
         </div>
         <div>
           <label className="text-sm">Versao</label>
@@ -317,12 +296,28 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
           </p>
         </header>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="accent-blue-500"
-              checked={requireDriverField}
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Quem executa o checklist?</span>
+            <select
+              className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+              value={actorKind}
+              onChange={(event) =>
+                setActorKind(event.target.value as ChecklistTemplate["type"])
+              }
+            >
+              <option value="operador">Operador</option>
+              <option value="motorista">Motorista</option>
+              <option value="mecanico">Mecânico</option>
+            </select>
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="accent-blue-500"
+                checked={requireDriverField}
               onChange={(event) => setRequireDriverField(event.target.checked)}
             />
             Exibir campos para motorista no formulário
@@ -338,17 +333,18 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
             />
             Exigir assinatura do {actorKindLabel.toLowerCase()}
           </label>
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="accent-blue-500"
-              checked={requireMotoristSignature}
-              onChange={(event) =>
-                setRequireMotoristSignature(event.target.checked)
-              }
-            />
-            Exigir assinatura do motorista
-          </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="accent-blue-500"
+                checked={requireMotoristSignature}
+                onChange={(event) =>
+                  setRequireMotoristSignature(event.target.checked)
+                }
+              />
+              Exigir assinatura do motorista
+            </label>
+          </div>
         </div>
       </section>
 

@@ -21,6 +21,8 @@ import {
   getActorSnapshot,
   getTemplateActorConfig,
   getTemplateHeader,
+  resolvePrimaryActorLabel,
+  resolveSecondaryActorLabel,
 } from "@/lib/checklist";
 
 const DAYS_IN_WEEK = 7;
@@ -214,8 +216,12 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
     () => getTemplateActorConfig(selectedTemplate ?? undefined, { fallbackKind: machineActorKind }),
     [selectedTemplate, machineActorKind],
   );
+  const primaryActorLabel = useMemo(
+    () => resolvePrimaryActorLabel(actorConfig.kind, machineActorLabel),
+    [actorConfig.kind, machineActorLabel],
+  );
   const secondaryActorLabel = useMemo(
-    () => (actorConfig.kind === "mecanico" ? "Motorista" : machineActorLabel),
+    () => resolveSecondaryActorLabel(actorConfig.kind, machineActorLabel),
     [actorConfig.kind, machineActorLabel],
   );
 
@@ -511,7 +517,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-              Matrícula do {machineActorLabel.toLowerCase()}
+              Matrícula do {primaryActorLabel.toLowerCase()}
               <input
                 type="text"
                 value={operatorMatricula}
@@ -520,7 +526,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-              Nome do {machineActorLabel.toLowerCase()}
+              Nome do {primaryActorLabel.toLowerCase()}
               <input
                 type="text"
                 value={operatorNome}

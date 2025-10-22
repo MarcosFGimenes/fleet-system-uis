@@ -39,6 +39,8 @@ import {
   getTemplateActorConfig,
   getTemplateHeader,
   resolveDriverName,
+  resolvePrimaryActorLabel,
+  resolveSecondaryActorLabel,
 } from "@/lib/checklist";
 import type { UserRole } from "@/types/user";
 import { useUserLookup } from "@/hooks/useUserLookup";
@@ -611,14 +613,14 @@ export default function ChecklistByTagPage() {
     [currentTemplate, machineActorKind],
   );
   const showDriverFields = actorConfig.requireDriverField || actorConfig.kind === "mecanico";
-  const primaryActorLabel =
-    actorConfig.kind === "mecanico"
-      ? "Mecânico"
-      : actorConfig.kind === "motorista"
-      ? "Motorista"
-      : machineActorLabel;
-  const secondaryActorLabel =
-    actorConfig.kind === "mecanico" ? "Motorista" : machineActorLabel;
+  const primaryActorLabel = resolvePrimaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
+  const secondaryActorLabel = resolveSecondaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
 
   const userHasAccess = useMemo(() => {
     if (!currentTemplate || !userInfo) return false;

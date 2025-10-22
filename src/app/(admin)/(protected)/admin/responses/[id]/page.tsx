@@ -7,7 +7,12 @@ import { db } from "@/lib/firebase";
 import { saveChecklistPdf } from "@/lib/pdf";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import {
+  getTemplateActorConfig,
+  resolvePrimaryActorLabel,
+} from "@/lib/checklist";
+import {
   Machine,
+  resolveMachineActorKind,
   resolveMachineActorLabel,
   resolveMachineFleetType,
 } from "@/types/machine";
@@ -168,7 +173,15 @@ export default function ResponseDetailPage() {
     );
   }
 
-  const primaryActorLabel = resolveMachineActorLabel(machine ?? undefined);
+  const fallbackActorKind = resolveMachineActorKind(machine ?? undefined);
+  const actorConfig = getTemplateActorConfig(template, {
+    fallbackKind: fallbackActorKind,
+  });
+  const machineActorLabel = resolveMachineActorLabel(machine ?? undefined);
+  const primaryActorLabel = resolvePrimaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
   const primaryActorLower = primaryActorLabel.toLowerCase();
 
   const questionText = (questionId: string) =>

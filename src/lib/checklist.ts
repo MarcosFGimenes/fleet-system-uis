@@ -50,6 +50,29 @@ const TEMPLATE_HEADER_DEFAULT: ChecklistTemplateHeader = {
   documentNumber: "",
 };
 
+export const resolvePrimaryActorLabel = (
+  actorKind: ChecklistActorKind,
+  fallbackLabel?: string,
+): string => {
+  if (actorKind === "mecanico") {
+    return "Mecânico";
+  }
+  if (actorKind === "motorista") {
+    return "Motorista";
+  }
+  return fallbackLabel ?? "Operador";
+};
+
+export const resolveSecondaryActorLabel = (
+  actorKind: ChecklistActorKind,
+  fallbackLabel?: string,
+): string => {
+  if (actorKind === "mecanico") {
+    return "Motorista";
+  }
+  return fallbackLabel ?? "Motorista";
+};
+
 export const getTemplateActorConfig = (
   template?: ChecklistTemplate | null,
   options?: { fallbackKind?: ChecklistActorKind },
