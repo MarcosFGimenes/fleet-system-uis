@@ -214,6 +214,10 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
     () => getTemplateActorConfig(selectedTemplate ?? undefined, { fallbackKind: machineActorKind }),
     [selectedTemplate, machineActorKind],
   );
+  const secondaryActorLabel = useMemo(
+    () => (actorConfig.kind === "mecanico" ? "Motorista" : machineActorLabel),
+    [actorConfig.kind, machineActorLabel],
+  );
 
   const templateHeader = useMemo(() => getTemplateHeader(selectedTemplate ?? undefined), [selectedTemplate]);
 
@@ -549,7 +553,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
             {actorConfig.requireDriverField && (
               <>
                 <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-                  Matrícula do motorista
+                  Matrícula do {secondaryActorLabel.toLowerCase()}
                   <input
                     type="text"
                     value={driverMatricula}
@@ -558,7 +562,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-                  Nome do motorista
+                  Nome do {secondaryActorLabel.toLowerCase()}
                   <input
                     type="text"
                     value={driverNome}

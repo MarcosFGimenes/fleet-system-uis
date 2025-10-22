@@ -170,7 +170,8 @@ type HeaderSnapshot = {
   revision: string;
   documentNumber: string;
   lac: string;
-  motorista: string;
+  secondaryActorLabel: string;
+  secondaryActorName: string;
   placa: string;
   kmAtual: number | null;
   kmAnterior: number | null;
@@ -179,6 +180,12 @@ type HeaderSnapshot = {
 
 const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
   const { response, template, machine } = detail;
+  const machineActorLabel = resolveMachineActorLabel(machine);
+  const actorKind = resolveActorKind(detail);
+  const secondaryActorLabel =
+    actorKind === "mecanico" || actorKind === "motorista"
+      ? "Motorista"
+      : machineActorLabel;
   if (response.headerFrozen) {
     const frozen = response.headerFrozen;
     return {
@@ -188,7 +195,8 @@ const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
       revision: frozen.revision ?? "",
       documentNumber: frozen.documentNumber ?? "",
       lac: frozen.lac ?? "012",
-      motorista: frozen.motorista ?? "",
+      secondaryActorLabel,
+      secondaryActorName: frozen.motorista ?? "",
       placa: frozen.placa ?? machine?.placa ?? "",
       kmAtual: typeof frozen.kmAtual === "number" ? frozen.kmAtual : null,
       kmAnterior: typeof frozen.kmAnterior === "number" ? frozen.kmAnterior : null,
@@ -218,7 +226,8 @@ const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
     revision: templateHeader.revision ?? "",
     documentNumber: templateHeader.documentNumber ?? "",
     lac: "012",
-    motorista: driverName ?? "",
+    secondaryActorLabel,
+    secondaryActorName: driverName ?? "",
     placa: machine?.placa ?? "",
     kmAtual: readingValue,
     kmAnterior: typeof response.previousKm === "number" ? response.previousKm : null,
@@ -408,13 +417,13 @@ const appendChecklistToDoc = async (
       (actorConfig.requireMotoristSignature ?? false) ||
       Boolean(response.actor?.driverNome) ||
       Boolean(response.signatures?.driverUrl) ||
-      Boolean(headerData.motorista);
+      Boolean(headerData.secondaryActorName);
 
     if (driverVisible) {
       blocks.push({
-        label: "Assinatura do motorista",
+        label: `Assinatura do ${headerData.secondaryActorLabel.toLowerCase()}`,
         matricula: response.actor?.driverMatricula ?? "",
-        nome: response.actor?.driverNome ?? headerData.motorista ?? "",
+        nome: response.actor?.driverNome ?? headerData.secondaryActorName ?? "",
         signatureUrl: response.signatures?.driverUrl ?? null,
         required: actorConfig.requireMotoristSignature ?? false,
       });
@@ -518,12 +527,26 @@ const appendChecklistToDoc = async (
   const lacWidth = 30;
   const placaWidth = 45;
   const kmWidth = 40;
-  const motoristaWidth = availableWidth - lacWidth - placaWidth - kmWidth;
+  const secondaryActorWidth = availableWidth - lacWidth - placaWidth - kmWidth;
   drawHeaderCell(margin, lacWidth, row3Y, row3Height, "Lac", headerData.lac || "012");
-  drawHeaderCell(margin + lacWidth, motoristaWidth, row3Y, row3Height, "Motorista", headerData.motorista || "");
-  drawHeaderCell(margin + lacWidth + motoristaWidth, placaWidth, row3Y, row3Height, "Placa", headerData.placa || "");
   drawHeaderCell(
-    margin + lacWidth + motoristaWidth + placaWidth,
+    margin + lacWidth,
+    secondaryActorWidth,
+    row3Y,
+    row3Height,
+    headerData.secondaryActorLabel,
+    headerData.secondaryActorName || "",
+  );
+  drawHeaderCell(
+    margin + lacWidth + secondaryActorWidth,
+    placaWidth,
+    row3Y,
+    row3Height,
+    "Placa",
+    headerData.placa || "",
+  );
+  drawHeaderCell(
+    margin + lacWidth + secondaryActorWidth + placaWidth,
     kmWidth,
     row3Y,
     row3Height,
