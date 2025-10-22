@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { ChecklistResponse } from "@/types/checklist";
-import { Machine } from "@/types/machine";
+import { Machine, resolveMachineFleetType } from "@/types/machine";
 import {
   Bar,
   BarChart,
@@ -127,7 +127,11 @@ export default function AnalyticsPage() {
 
       const machineList = machinesSnap.docs.map((docSnap) => {
         const data = docSnap.data() as Omit<Machine, "id">;
-        return { id: docSnap.id, ...data } satisfies Machine;
+        return {
+          id: docSnap.id,
+          ...data,
+          fleetType: resolveMachineFleetType(data.fleetType),
+        } satisfies Machine;
       });
 
       setRows(responseList);

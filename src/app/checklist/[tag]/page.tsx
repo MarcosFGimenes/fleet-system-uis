@@ -18,7 +18,12 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Machine } from "@/types/machine";
+import {
+  Machine,
+  resolveMachineActorKind,
+  resolveMachineActorLabel,
+  resolveMachineFleetType,
+} from "@/types/machine";
 import type {
   ChecklistAnswer,
   ChecklistRecurrenceStatus,
@@ -283,11 +288,6 @@ const ROLE_LABEL: Record<UserRole, string> = {
   admin: "Administrador",
 };
 
-const TEMPLATE_ROLE_LABEL: Record<ChecklistTemplate["type"], string> = {
-  operador: ROLE_LABEL.operador,
-  motorista: ROLE_LABEL.motorista,
-  mecanico: ROLE_LABEL.mecanico,
-};
 
 /* ============================
    Ícones inline (SVG)
@@ -529,10 +529,12 @@ export default function ChecklistByTagPage() {
           throw new Error("Máquina não encontrada pelo QR ou TAG.");
         }
         const machineDoc = machineSnap.docs[0];
+        const machineRaw = machineDoc.data() as Omit<Machine, "id">;
         const machineData = {
           id: machineDoc.id,
-          ...(machineDoc.data() as Omit<Machine, "id">),
-        } as Machine;
+          ...machineRaw,
+          fleetType: resolveMachineFleetType(machineRaw.fleetType),
+        } satisfies Machine;
         setMachine(machineData);
 
         if (machineData.checklists?.length) {
@@ -596,14 +598,25 @@ export default function ChecklistByTagPage() {
     return templates.find((tpl) => tpl.id === selectedTemplateId) || null;
   }, [templates, selectedTemplateId]);
 
-  const actorConfig = useMemo(() => getTemplateActorConfig(currentTemplate), [currentTemplate]);
+  const machineActorKind = useMemo(
+    () => resolveMachineActorKind(machine ?? undefined),
+    [machine],
+  );
+  const machineActorLabel = useMemo(
+    () => resolveMachineActorLabel(machine ?? undefined),
+    [machine],
+  );
+  const actorConfig = useMemo(
+    () => getTemplateActorConfig(currentTemplate, { fallbackKind: machineActorKind }),
+    [currentTemplate, machineActorKind],
+  );
   const showDriverFields = actorConfig.requireDriverField || actorConfig.kind === "mecanico";
   const primaryActorLabel =
     actorConfig.kind === "mecanico"
       ? "Mecânico"
       : actorConfig.kind === "motorista"
       ? "Motorista"
-      : "Operador";
+      : machineActorLabel;
 
   const userHasAccess = useMemo(() => {
     if (!currentTemplate || !userInfo) return false;
@@ -1364,7 +1377,7 @@ export default function ChecklistByTagPage() {
               )}
               {userLookup.state === "found" && nome && currentTemplate && !userHasAccess && userInfo && (
                 <p className="text-xs text-[var(--danger)]">
-                  Usuário com função {ROLE_LABEL[userInfo.role]} não possui permissão para checklists do tipo {TEMPLATE_ROLE_LABEL[actorConfig.kind]}.
+                  Usuário com função {ROLE_LABEL[userInfo.role]} não possui permissão para checklists destinados a {primaryActorLabel.toLowerCase()}.
                 </p>
               )}
             </div>

@@ -10,7 +10,11 @@ import {
   ChecklistTemplate,
   NonConformityStatus,
 } from "@/types/checklist";
-import { Machine } from "@/types/machine";
+import {
+  Machine,
+  resolveMachineActorLabel,
+  resolveMachineFleetType,
+} from "@/types/machine";
 import {
   collection,
   doc,
@@ -93,7 +97,11 @@ export default function NonConformitiesAdminPage() {
 
       const machineList = machinesSnap.docs.map((docSnap) => {
         const data = docSnap.data() as Omit<Machine, "id">;
-        return { id: docSnap.id, ...data } satisfies Machine;
+        return {
+          id: docSnap.id,
+          ...data,
+          fleetType: resolveMachineFleetType(data.fleetType),
+        } satisfies Machine;
       });
 
       const templateList = templatesSnap.docs.map((docSnap) => {
@@ -358,11 +366,14 @@ export default function NonConformitiesAdminPage() {
             Nenhuma não conformidade encontrada para os filtros selecionados.
           </div>
         ) : (
-          filteredItems.map((item, index) => (
-            <article
-              key={item.id}
-              className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-            >
+          filteredItems.map((item, index) => {
+            const actorLabel = resolveMachineActorLabel(item.machine ?? undefined);
+            const actorLower = actorLabel.toLowerCase();
+            return (
+              <article
+                key={item.id}
+                className="space-y-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+              >
               <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold text-gray-900">
@@ -381,12 +392,12 @@ export default function NonConformitiesAdminPage() {
                     {item.machine?.tag ? ` • TAG ${item.machine.tag}` : ""}
                   </div>
                   <div className="text-xs text-gray-500">
-                    Operador: {item.operatorNome ?? "Não informado"}
+                    {actorLabel}: {item.operatorNome ?? "Não informado"}
                     {item.operatorMatricula ? ` (Mat. ${item.operatorMatricula})` : ""}
                   </div>
                   {item.observation && (
                     <p className="text-sm text-gray-700">
-                      Observações do operador: {item.observation}
+                      Observações do {actorLower}: {item.observation}
                     </p>
                   )}
                   {item.photoUrls.length > 0 && (
@@ -517,8 +528,9 @@ export default function NonConformitiesAdminPage() {
                   </button>
                 </div>
               </div>
-            </article>
-          ))
+              </article>
+            );
+          })
         )}
       </section>
     </div>

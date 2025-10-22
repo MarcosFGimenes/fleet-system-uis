@@ -6,7 +6,11 @@ import {
   ChecklistResponse,
   ChecklistTemplate,
 } from "@/types/checklist";
-import { Machine } from "@/types/machine";
+import {
+  Machine,
+  resolveMachineActorKind,
+  resolveMachineActorLabel,
+} from "@/types/machine";
 import {
   formatDateShort,
   getTemplateActorConfig,
@@ -193,7 +197,8 @@ const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
   }
 
   const templateHeader = getTemplateHeader(template);
-  const actorConfig = getTemplateActorConfig(template);
+  const fallbackKind = resolveMachineActorKind(machine);
+  const actorConfig = getTemplateActorConfig(template, { fallbackKind });
   const parsedDate = parseResponseDate(response.createdAt) ?? new Date();
   const readingValue =
     typeof response.km === "number"
@@ -222,11 +227,12 @@ const resolveHeaderData = (detail: ChecklistPdfDetail): HeaderSnapshot => {
 };
 
 const resolveActorKind = (detail: ChecklistPdfDetail): ChecklistTemplate["type"] => {
+  const fallbackKind = resolveMachineActorKind(detail.machine);
   return (
     detail.response.actor?.kind ??
     detail.template?.actor?.kind ??
     detail.template?.type ??
-    "operador"
+    fallbackKind
   );
 };
 
@@ -240,7 +246,8 @@ const appendChecklistToDoc = async (
   const lineHeight = 6;
   const pageHeight = doc.internal.pageSize.getHeight();
   const pageWidth = doc.internal.pageSize.getWidth();
-  const actorConfig = getTemplateActorConfig(template);
+  const fallbackKind = resolveMachineActorKind(machine);
+  const actorConfig = getTemplateActorConfig(template, { fallbackKind });
   const actorKind = resolveActorKind(detail);
   const headerData = resolveHeaderData(detail);
 
@@ -371,12 +378,13 @@ const appendChecklistToDoc = async (
 
   const renderSignatureSection = async () => {
     const blocks: SignatureBlock[] = [];
+    const primaryActorLabel = resolveMachineActorLabel(machine);
     const actorLabel =
       actorKind === "mecanico"
         ? "Mecânico"
         : actorKind === "motorista"
         ? "Motorista"
-        : "Operador";
+        : primaryActorLabel;
 
     const operatorMatricula =
       actorKind === "mecanico"
@@ -556,7 +564,7 @@ const appendChecklistToDoc = async (
         ? "Mecânico"
         : actorKind === "motorista"
         ? "Motorista"
-        : "Operador";
+        : resolveMachineActorLabel(machine);
     const actorName = response.operatorNome ? response.operatorNome : "Não informado";
     const matriculaLabel = response.operatorMatricula ? ` (Mat. ${response.operatorMatricula})` : "";
     addParagraph(`${actorLabel}: ${actorName}${matriculaLabel}`);
@@ -626,7 +634,7 @@ const appendChecklistToDoc = async (
       const recurrenceLabel =
         answer.recurrence.status === "still_nc"
           ? "Permanece em não conformidade"
-          : "Operador informou que a não conformidade foi resolvida";
+          : `${resolveMachineActorLabel(machine)} informou que a não conformidade foi resolvida`;
       addParagraph(`Reincidência: ${recurrenceLabel}`);
     }
     addParagraph("", { spacing: 2 });
@@ -746,6 +754,10 @@ export const downloadWeeklyTemplatePdf = ({
   const firstDate = weekDates[0];
   const lastDate = weekDates[weekDates.length - 1];
   const weekRangeLabel = `${formatDatePtBr(firstDate)} a ${formatDatePtBr(lastDate)}`;
+  const primaryActorLabel = resolveMachineActorLabel(machine);
+  const primaryActorLower = primaryActorLabel.toLowerCase();
+  const primaryActorPlural =
+    primaryActorLabel === "Operador" ? "Operadores" : `${primaryActorLabel}s`;
 
   const minQuestionWidth = 95;
   const minDayWidth = 26;
@@ -860,14 +872,14 @@ export const downloadWeeklyTemplatePdf = ({
 
     y += 2;
     doc.text(
-      "Assinatura do operador responsável: ________________________________   Data: ____/____/____",
+      `Assinatura do ${primaryActorLower} responsável: ________________________________   Data: ____/____/____`,
       margin,
       y,
     );
     y += lineHeight * 1.4 + 1;
 
     doc.setFont("helvetica", "bold");
-    doc.text("Operadores por dia:", margin, y);
+    doc.text(`${primaryActorPlural} por dia:`, margin, y);
     y += lineHeight;
 
     doc.setFont("helvetica", "normal");
@@ -875,7 +887,7 @@ export const downloadWeeklyTemplatePdf = ({
     weekDates.forEach((date) => {
       const label = formatWeekdayColumnLabel(date);
       doc.text(
-        `${label} — Operador: __________________________   Matrícula: ________________`,
+        `${label} — ${primaryActorLabel}: __________________________   Matrícula: ________________`,
         margin,
         y,
       );

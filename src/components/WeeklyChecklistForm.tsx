@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import type { Machine } from "@/types/machine";
+import {
+  Machine,
+  resolveMachineActorKind,
+  resolveMachineActorLabel,
+} from "@/types/machine";
 import type {
   ChecklistTemplate,
   ChecklistQuestion,
@@ -204,7 +208,12 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
 
   const weekDates = useMemo(() => buildWeekDates(startDate), [startDate]);
 
-  const actorConfig = useMemo(() => getTemplateActorConfig(selectedTemplate ?? undefined), [selectedTemplate]);
+  const machineActorKind = useMemo(() => resolveMachineActorKind(machine), [machine]);
+  const machineActorLabel = useMemo(() => resolveMachineActorLabel(machine), [machine]);
+  const actorConfig = useMemo(
+    () => getTemplateActorConfig(selectedTemplate ?? undefined, { fallbackKind: machineActorKind }),
+    [selectedTemplate, machineActorKind],
+  );
 
   const templateHeader = useMemo(() => getTemplateHeader(selectedTemplate ?? undefined), [selectedTemplate]);
 
@@ -498,7 +507,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-              Matrícula do operador
+              Matrícula do {machineActorLabel.toLowerCase()}
               <input
                 type="text"
                 value={operatorMatricula}
@@ -507,7 +516,7 @@ export default function WeeklyChecklistForm({ machine, onCancel, onComplete }: W
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-[var(--muted)]">
-              Nome do operador
+              Nome do {machineActorLabel.toLowerCase()}
               <input
                 type="text"
                 value={operatorNome}

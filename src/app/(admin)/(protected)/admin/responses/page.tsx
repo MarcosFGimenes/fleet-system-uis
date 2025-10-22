@@ -10,7 +10,7 @@ import {
   orderBy,
   query,
 } from "firebase/firestore";
-import { Machine } from "@/types/machine";
+import { Machine, resolveMachineFleetType } from "@/types/machine";
 import {
   ChecklistResponse,
   ChecklistTemplate,
@@ -57,7 +57,11 @@ export default function ResponsesAdminPage() {
 
       const machineList = machinesSnap.docs.map((docSnap) => {
         const data = docSnap.data() as Omit<Machine, "id">;
-        return { id: docSnap.id, ...data } satisfies Machine;
+        return {
+          id: docSnap.id,
+          ...data,
+          fleetType: resolveMachineFleetType(data.fleetType),
+        } satisfies Machine;
       });
 
       const templateList = templatesSnap.docs.map((docSnap) => {

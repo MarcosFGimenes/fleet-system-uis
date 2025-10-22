@@ -6,7 +6,11 @@ import { useParams, useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { saveChecklistPdf } from "@/lib/pdf";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { Machine } from "@/types/machine";
+import {
+  Machine,
+  resolveMachineActorLabel,
+  resolveMachineFleetType,
+} from "@/types/machine";
 import {
   ChecklistResponse,
   ChecklistTemplate,
@@ -104,7 +108,12 @@ export default function ResponseDetailPage() {
         }
 
         if (machineSnap.exists()) {
-          setMachine({ id: machineSnap.id, ...(machineSnap.data() as Omit<Machine, "id">) });
+          const machineData = machineSnap.data() as Omit<Machine, "id">;
+          setMachine({
+            id: machineSnap.id,
+            ...machineData,
+            fleetType: resolveMachineFleetType(machineData.fleetType),
+          });
         } else {
           setMachine(null);
         }
@@ -158,6 +167,9 @@ export default function ResponseDetailPage() {
       </div>
     );
   }
+
+  const primaryActorLabel = resolveMachineActorLabel(machine ?? undefined);
+  const primaryActorLower = primaryActorLabel.toLowerCase();
 
   const questionText = (questionId: string) =>
     template?.questions.find((question) => question.id === questionId)?.text ?? questionId;
@@ -318,7 +330,7 @@ export default function ResponseDetailPage() {
             </dl>
           </div>
           <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">Operador</p>
+            <p className="text-xs uppercase tracking-wide text-[var(--hint)]">{primaryActorLabel}</p>
             <p className="mt-1 text-lg font-semibold text-[var(--text)]">
               {response.operatorNome ?? "Não informado"}
             </p>
@@ -448,7 +460,7 @@ export default function ResponseDetailPage() {
                       )}
                       {item.type === "question" && item.answer.observation && (
                         <p className="mt-3 text-sm text-[var(--hint)]">
-                          Observações do operador:{" "}
+                          Observações do {primaryActorLower}:{" "}
                           <span className="text-[var(--text)]">{item.answer.observation}</span>
                         </p>
                       )}

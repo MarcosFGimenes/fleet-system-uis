@@ -11,7 +11,11 @@ import {
   getDocs,
   updateDoc,
 } from "firebase/firestore";
-import { Machine } from "@/types/machine";
+import {
+  MACHINE_FLEET_TYPE_LABEL,
+  Machine,
+  resolveMachineFleetType,
+} from "@/types/machine";
 import MachineForm from "@/components/MachineForm";
 import QrCodeGenerator from "@/components/QrCodeGenerator";
 import WeeklyChecklistForm from "@/components/WeeklyChecklistForm";
@@ -32,7 +36,11 @@ export default function MachinesAdminPage() {
     const snap = await getDocs(machinesCol);
     const list = snap.docs.map((docSnap) => {
       const data = docSnap.data() as Omit<Machine, "id">;
-      return { id: docSnap.id, ...data } satisfies Machine;
+      return {
+        id: docSnap.id,
+        ...data,
+        fleetType: resolveMachineFleetType(data.fleetType),
+      } satisfies Machine;
     });
     setMachines(list);
   }, [machinesCol]);
@@ -70,7 +78,7 @@ export default function MachinesAdminPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Máquinas</h1>
           <p className="text-sm text-[var(--muted)]">
-            Gerencie frota, TAGs e templates vinculados.
+            Gerencie equipamentos da frota, TAGs e templates vinculados.
           </p>
         </div>
         {ui.mode === "list" && (
@@ -167,6 +175,7 @@ export default function MachinesAdminPage() {
                   <th className="px-4 py-3 text-left font-medium">Placa</th>
                   <th className="px-4 py-3 text-left font-medium">Setor</th>
                   <th className="px-4 py-3 text-left font-medium">TAG</th>
+                  <th className="px-4 py-3 text-left font-medium">Tipo</th>
                   <th className="px-4 py-3 text-right font-medium">Ações</th>
                 </tr>
               </thead>
@@ -183,6 +192,9 @@ export default function MachinesAdminPage() {
                       <code className="rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--text)]">
                         {machine.tag}
                       </code>
+                    </td>
+                    <td className="px-4 py-3 text-[var(--muted)]">
+                      {MACHINE_FLEET_TYPE_LABEL[resolveMachineFleetType(machine.fleetType)]}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
@@ -223,7 +235,7 @@ export default function MachinesAdminPage() {
 
                 {machines.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-[var(--hint)]">
+                    <td colSpan={6} className="px-4 py-6 text-center text-[var(--hint)]">
                       Nenhuma máquina cadastrada até o momento.
                     </td>
                   </tr>
