@@ -53,6 +53,16 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
   const [actorKind, setActorKind] = useState<ChecklistTemplate["type"]>(
     fallbackActor.kind,
   );
+  const actorKindLabel = useMemo(() => {
+    switch (actorKind) {
+      case "motorista":
+        return "Motorista";
+      case "mecanico":
+        return "Mecânico";
+      default:
+        return "Operador";
+    }
+  }, [actorKind]);
   const [requireDriverField, setRequireDriverField] = useState<boolean>(
     fallbackActor.requireDriverField ?? false,
   );
@@ -214,7 +224,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
             className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Checklist Diario Operador"
+            placeholder={`Checklist diário ${actorKindLabel.toLowerCase()}`}
           />
         </div>
         <div>
@@ -326,7 +336,7 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                 setRequireOperatorSignature(event.target.checked)
               }
             />
-            Exigir assinatura do {actorKind === "mecanico" ? "mecânico" : "operador"}
+            Exigir assinatura do {actorKindLabel.toLowerCase()}
           </label>
           <label className="inline-flex items-center gap-2 text-sm">
             <input

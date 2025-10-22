@@ -8,6 +8,7 @@ import Alert from "@/components/ui/Alert";
 import DataTable from "@/components/ui/DataTable";
 import type { NonConformity } from "@/types/nonconformity";
 import type { Machine } from "@/types/machine";
+import { resolveMachineFleetType } from "@/types/machine";
 import { db } from "@/lib/firebase";
 import {
   calcAvgContainmentHours,
@@ -84,7 +85,12 @@ export default function AssetReliabilityPage() {
           setLoading(false);
           return;
         }
-        setMachine({ id: machineSnap.id, ...(machineSnap.data() as Omit<Machine, "id">) });
+        const machineData = machineSnap.data() as Omit<Machine, "id">;
+        setMachine({
+          id: machineSnap.id,
+          ...machineData,
+          fleetType: resolveMachineFleetType(machineData.fleetType),
+        });
 
         const response = await fetch(`/api/nc?assetId=${assetId}&pageSize=500`);
         if (!response.ok) throw new Error("Falha ao carregar NCs deste ativo");

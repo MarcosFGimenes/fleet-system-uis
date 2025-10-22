@@ -10,7 +10,7 @@ import {
   getDocs,
   updateDoc,
 } from "firebase/firestore";
-import { Machine } from "@/types/machine";
+import { Machine, resolveMachineFleetType } from "@/types/machine";
 import { ChecklistTemplate } from "@/types/checklist";
 
 type Params = {
@@ -43,10 +43,12 @@ export default function MachineTemplatesLinkPage() {
         if (!machineSnap.exists()) {
           throw new Error("Máquina não encontrada.");
         }
+        const machineRaw = machineSnap.data() as Omit<Machine, "id">;
         const machineData = {
           id: machineSnap.id,
-          ...(machineSnap.data() as Omit<Machine, "id">),
-        } as Machine;
+          ...machineRaw,
+          fleetType: resolveMachineFleetType(machineRaw.fleetType),
+        } satisfies Machine;
         setMachine(machineData);
 
         const templatesSnap = await getDocs(templatesCol);

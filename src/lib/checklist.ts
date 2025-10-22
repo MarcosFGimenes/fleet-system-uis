@@ -27,6 +27,22 @@ const TEMPLATE_ACTOR_DEFAULT: ChecklistTemplateActorConfig = {
   requireMotoristSignature: false,
 };
 
+const TEMPLATE_ACTOR_DEFAULT_BY_KIND: Record<ChecklistActorKind, ChecklistTemplateActorConfig> = {
+  operador: TEMPLATE_ACTOR_DEFAULT,
+  motorista: {
+    kind: "motorista",
+    requireDriverField: true,
+    requireOperatorSignature: false,
+    requireMotoristSignature: true,
+  },
+  mecanico: {
+    kind: "mecanico",
+    requireDriverField: true,
+    requireOperatorSignature: false,
+    requireMotoristSignature: true,
+  },
+};
+
 const TEMPLATE_HEADER_DEFAULT: ChecklistTemplateHeader = {
   foNumber: "",
   issueDate: "",
@@ -36,16 +52,19 @@ const TEMPLATE_HEADER_DEFAULT: ChecklistTemplateHeader = {
 
 export const getTemplateActorConfig = (
   template?: ChecklistTemplate | null,
+  options?: { fallbackKind?: ChecklistActorKind },
 ): ChecklistTemplateActorConfig => {
   const actor = template?.actor;
-  const kind = actor?.kind ?? template?.type ?? TEMPLATE_ACTOR_DEFAULT.kind;
+  const fallbackKind = options?.fallbackKind ?? TEMPLATE_ACTOR_DEFAULT.kind;
+  const kind = actor?.kind ?? template?.type ?? fallbackKind;
+  const defaults = TEMPLATE_ACTOR_DEFAULT_BY_KIND[kind] ?? TEMPLATE_ACTOR_DEFAULT;
   return {
     kind,
-    requireDriverField: actor?.requireDriverField ?? TEMPLATE_ACTOR_DEFAULT.requireDriverField,
+    requireDriverField: actor?.requireDriverField ?? defaults.requireDriverField,
     requireOperatorSignature:
-      actor?.requireOperatorSignature ?? TEMPLATE_ACTOR_DEFAULT.requireOperatorSignature,
+      actor?.requireOperatorSignature ?? defaults.requireOperatorSignature,
     requireMotoristSignature:
-      actor?.requireMotoristSignature ?? TEMPLATE_ACTOR_DEFAULT.requireMotoristSignature,
+      actor?.requireMotoristSignature ?? defaults.requireMotoristSignature,
   } satisfies ChecklistTemplateActorConfig;
 };
 

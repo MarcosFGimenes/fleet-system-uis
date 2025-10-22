@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@lib/firebase";
-import type { Machine } from "@/types/machine";
+import {
+  MACHINE_FLEET_TYPE_LABEL,
+  Machine,
+  resolveMachineFleetType,
+} from "@/types/machine";
 
 export default function MachinesPublicPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -15,7 +19,14 @@ export default function MachinesPublicPage() {
   useEffect(() => {
     const load = async () => {
       const snap = await getDocs(machinesCol);
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Machine, "id">) })) as Machine[];
+      const list = snap.docs.map((d) => {
+        const data = d.data() as Omit<Machine, "id">;
+        return {
+          id: d.id,
+          ...data,
+          fleetType: resolveMachineFleetType(data.fleetType),
+        } satisfies Machine;
+      });
       setMachines(list);
     };
     void load();
@@ -54,7 +65,9 @@ export default function MachinesPublicPage() {
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((m) => (
+            {filtered.map((m) => {
+              const fleetLabel = MACHINE_FLEET_TYPE_LABEL[resolveMachineFleetType(m.fleetType)];
+              return (
               <div key={m.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
                 <p className="font-semibold text-[var(--text)]">{m.modelo}</p>
                 <p className="mt-1 text-xs font-medium text-[var(--muted)]">
@@ -72,6 +85,7 @@ export default function MachinesPublicPage() {
                     {m.tag}
                   </code>
                 </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">{fleetLabel}</p>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
@@ -88,7 +102,8 @@ export default function MachinesPublicPage() {
                   </Link>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {filtered.length === 0 && (
               <div className="col-span-full text-sm font-medium text-[var(--muted)]">
