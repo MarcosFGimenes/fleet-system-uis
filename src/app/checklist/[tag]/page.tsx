@@ -39,6 +39,8 @@ import {
   getTemplateActorConfig,
   getTemplateHeader,
   resolveDriverName,
+  resolvePrimaryActorLabel,
+  resolveSecondaryActorLabel,
 } from "@/lib/checklist";
 import type { UserRole } from "@/types/user";
 import { useUserLookup } from "@/hooks/useUserLookup";
@@ -611,12 +613,14 @@ export default function ChecklistByTagPage() {
     [currentTemplate, machineActorKind],
   );
   const showDriverFields = actorConfig.requireDriverField || actorConfig.kind === "mecanico";
-  const primaryActorLabel =
-    actorConfig.kind === "mecanico"
-      ? "Mecânico"
-      : actorConfig.kind === "motorista"
-      ? "Motorista"
-      : machineActorLabel;
+  const primaryActorLabel = resolvePrimaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
+  const secondaryActorLabel = resolveSecondaryActorLabel(
+    actorConfig.kind,
+    machineActorLabel,
+  );
 
   const userHasAccess = useMemo(() => {
     if (!currentTemplate || !userInfo) return false;
@@ -1028,7 +1032,10 @@ export default function ChecklistByTagPage() {
         showDriverFields &&
         !driverSignatureDataUrl
       ) {
-        showNotification("A assinatura do motorista é obrigatória.", "warning");
+        showNotification(
+          `A assinatura do ${secondaryActorLabel.toLowerCase()} é obrigatória.`,
+          "warning",
+        );
         return;
       }
 
@@ -1130,9 +1137,12 @@ export default function ChecklistByTagPage() {
         try {
           driverSignatureUrl = await uploadSignature(driverSignatureDataUrl, "driver");
         } catch (error) {
-          console.error("Erro ao enviar assinatura do motorista", error);
+          console.error(
+            `Erro ao enviar assinatura do ${secondaryActorLabel.toLowerCase()}`,
+            error,
+          );
           showNotification(
-            "Não foi possível salvar a assinatura do motorista. Tente novamente.",
+            `Não foi possível salvar a assinatura do ${secondaryActorLabel.toLowerCase()}. Tente novamente.`,
             "error",
           );
           const uploadError = new Error("SIGNATURE_UPLOAD_ERROR");
@@ -1396,23 +1406,27 @@ export default function ChecklistByTagPage() {
           {showDriverFields && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-sm text-[var(--hint)]">Matrícula do motorista (opcional)</label>
+                <label className="text-sm text-[var(--hint)]">
+                  Matrícula do {secondaryActorLabel.toLowerCase()} (opcional)
+                </label>
                 <input
                   value={driverMatricula}
                   onChange={(event) => setDriverMatricula(event.target.value)}
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                   placeholder="Ex: 2002"
-                  aria-label="Matrícula do motorista"
+                  aria-label={`Matrícula do ${secondaryActorLabel.toLowerCase()}`}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm text-[var(--hint)]">Nome do motorista (opcional)</label>
+                <label className="text-sm text-[var(--hint)]">
+                  Nome do {secondaryActorLabel.toLowerCase()} (opcional)
+                </label>
                 <input
                   value={driverNome}
                   onChange={(event) => setDriverNome(event.target.value)}
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-[var(--text)] placeholder-[var(--hint)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                   placeholder="Informe o nome, se necessário"
-                  aria-label="Nome do motorista"
+                  aria-label={`Nome do ${secondaryActorLabel.toLowerCase()}`}
                 />
               </div>
             </div>
@@ -1839,11 +1853,11 @@ export default function ChecklistByTagPage() {
           </div>
           {(showDriverFields || actorConfig.kind === "mecanico" || actorConfig.requireMotoristSignature) && (
             <SignaturePad
-              label="Assinatura do motorista"
+              label={`Assinatura do ${secondaryActorLabel.toLowerCase()}`}
               description={
                 actorConfig.kind === "mecanico"
-                  ? "Opcional – use quando houver acompanhamento do motorista."
-                  : "Assinatura do motorista responsável pelo equipamento."
+                  ? `Opcional – use quando houver acompanhamento do ${secondaryActorLabel.toLowerCase()}.`
+                  : `Assinatura do ${secondaryActorLabel.toLowerCase()} responsável pelo equipamento.`
               }
               required={actorConfig.requireMotoristSignature}
               onChange={setDriverSignatureDataUrl}
