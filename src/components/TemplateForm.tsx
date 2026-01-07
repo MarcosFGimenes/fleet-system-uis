@@ -575,8 +575,8 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                         }
                         className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                       >
-                        <option value="ok">Se a resposta for "Conforme"</option>
-                        <option value="nc">Se a resposta for "Não Conforme"</option>
+                        <option value="ok">Se a resposta for &quot;Conforme&quot;</option>
+                        <option value="nc">Se a resposta for &quot;Não Conforme&quot;</option>
                         <option value="always">Sempre</option>
                       </select>
                     </label>

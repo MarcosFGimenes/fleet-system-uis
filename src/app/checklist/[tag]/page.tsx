@@ -1023,7 +1023,7 @@ export default function ChecklistByTagPage() {
               (typeof value === "number" && Number.isFinite(value)) ||
               (typeof value === "string" && value.trim() !== "");
             if (hasValue) {
-              answer.variableValue = value as any;
+              answer.variableValue = value as string | number | boolean;
             }
           }
         }
