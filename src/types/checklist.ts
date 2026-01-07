@@ -13,6 +13,50 @@ export type ChecklistVariableType =
 
 export type ChecklistVariableCondition = "ok" | "nc" | "always";
 
+/**
+ * Configuração de alerta para variáveis não conformes.
+ * Quando a variável é marcada como não conforme, um alerta é exibido.
+ */
+export interface ChecklistVariableAlertRule {
+  /**
+   * Cor do cartão de alerta (em formato Tailwind ou hexadecimal).
+   * Ex.: "red", "amber", "orange", "#ef4444"
+   */
+  color: string;
+  /**
+   * Mensagem a ser exibida no alerta.
+   */
+  message: string;
+  /**
+   * Condição que aciona o alerta:
+   * - 'nc': quando a resposta é Não Conforme
+   * - 'ok': quando a resposta é Conforme (menos comum)
+   * - 'always': sempre exibir
+   */
+  triggerCondition: "ok" | "nc" | "always";
+  /**
+   * Se o alerta deve ser exibido na tela inicial.
+   */
+  showOnHomePage?: boolean;
+}
+
+/**
+ * Periodicidade própria para uma variável.
+ * Permite monitorar se a variável está sendo respondida com a frequência esperada.
+ */
+export interface ChecklistVariablePeriodicity {
+  /** Quantidade de dias/semanas/meses */
+  quantity: number;
+  /** Unidade de tempo */
+  unit: ChecklistPeriodicityUnit;
+  /** Janela de dias para considerar conforme */
+  windowDays: number;
+  /** Âncora da periodicidade */
+  anchor: ChecklistPeriodicityAnchor;
+  /** Se a periodicidade está ativa */
+  active: boolean;
+}
+
 export interface ChecklistQuestionVariable {
   /**
    * Rótulo exibido ao operador quando a variável for solicitada.
@@ -28,6 +72,16 @@ export interface ChecklistQuestionVariable {
    * - 'always': sempre
    */
   condition: ChecklistVariableCondition;
+  /**
+   * Regra de alerta opcional para quando a variável é marcada como não conforme.
+   * Se definida, um alerta será exibido na tela inicial.
+   */
+  alertRule?: ChecklistVariableAlertRule;
+  /**
+   * Periodicidade própria da variável.
+   * Permite monitorar se a variável está sendo respondida com a frequência esperada.
+   */
+  periodicity?: ChecklistVariablePeriodicity;
 }
 
 export interface ChecklistQuestion {

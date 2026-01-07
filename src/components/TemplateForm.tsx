@@ -8,7 +8,9 @@ import {
   ChecklistTemplate,
   ChecklistTemplateActorConfig,
   ChecklistTemplateHeader,
+  ChecklistVariableAlertRule,
   ChecklistVariableCondition,
+  ChecklistVariablePeriodicity,
   ChecklistVariableType,
 } from "@/types/checklist";
 
@@ -20,6 +22,16 @@ type QuestionDraft = {
   variableName?: string;
   variableType?: ChecklistVariableType;
   variableCondition?: ChecklistVariableCondition;
+  // Regras de alerta
+  alertRuleEnabled?: boolean;
+  alertRuleColor?: string;
+  alertRuleMessage?: string;
+  alertRuleTriggerCondition?: "ok" | "nc" | "always";
+  alertRuleShowOnHomePage?: boolean;
+  // Periodicidade da variável
+  variablePeriodicityEnabled?: boolean;
+  variablePeriodicityQuantity?: number;
+  variablePeriodicityUnit?: ChecklistPeriodicityUnit;
 };
 
 export type TemplateFormPayload = {
@@ -92,6 +104,16 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       variableName: question.variable?.name ?? "",
       variableType: question.variable?.type ?? undefined,
       variableCondition: question.variable?.condition ?? undefined,
+      // Regras de alerta
+      alertRuleEnabled: Boolean(question.variable?.alertRule),
+      alertRuleColor: question.variable?.alertRule?.color ?? "#ef4444",
+      alertRuleMessage: question.variable?.alertRule?.message ?? "",
+      alertRuleTriggerCondition: question.variable?.alertRule?.triggerCondition ?? "nc",
+      alertRuleShowOnHomePage: question.variable?.alertRule?.showOnHomePage ?? true,
+      // Periodicidade
+      variablePeriodicityEnabled: Boolean(question.variable?.periodicity?.active),
+      variablePeriodicityQuantity: question.variable?.periodicity?.quantity ?? 1,
+      variablePeriodicityUnit: question.variable?.periodicity?.unit ?? "day",
     }));
   });
 
@@ -195,11 +217,45 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
               question.variableCondition === "nc" ||
               question.variableCondition === "always")
           ) {
-            base.variable = {
+            const variable: typeof base.variable = {
               name,
               type: question.variableType,
               condition: question.variableCondition,
             };
+
+            // Adiciona regra de alerta se habilitada
+            if (question.alertRuleEnabled && question.alertRuleColor && question.alertRuleMessage) {
+              variable.alertRule = {
+                color: question.alertRuleColor.trim(),
+                message: question.alertRuleMessage.trim(),
+                triggerCondition: question.alertRuleTriggerCondition ?? "nc",
+                showOnHomePage: question.alertRuleShowOnHomePage ?? true,
+              };
+            }
+
+            // Adiciona periodicidade se habilitada
+            if (
+              question.variablePeriodicityEnabled &&
+              question.variablePeriodicityQuantity &&
+              question.variablePeriodicityUnit
+            ) {
+              const normalizedQty = Math.max(1, Math.floor(Number(question.variablePeriodicityQuantity) || 1));
+              // Calcula windowDays similar ao template
+              let multiplier = 1;
+              if (question.variablePeriodicityUnit === "week") multiplier = 7;
+              if (question.variablePeriodicityUnit === "month") multiplier = 30;
+              const windowDays = normalizedQty * multiplier;
+
+              variable.periodicity = {
+                quantity: normalizedQty,
+                unit: question.variablePeriodicityUnit,
+                windowDays,
+                anchor: "last_submission",
+                active: true,
+              };
+            }
+
+            base.variable = variable;
           }
           return base;
         }),
@@ -580,6 +636,150 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                         <option value="always">Sempre</option>
                       </select>
                     </label>
+                  </div>
+                )}
+
+                {/* Regra de Alerta */}
+                {question.variableEnabled && (
+                  <div className="mt-3 space-y-2 rounded-md border border-[var(--border)] bg-white p-3">
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-blue-500"
+                        checked={Boolean(question.alertRuleEnabled)}
+                        onChange={(e) =>
+                          updateQuestion(question.id, {
+                            alertRuleEnabled: e.target.checked,
+                            alertRuleColor: e.target.checked ? (question.alertRuleColor ?? "#ef4444") : question.alertRuleColor,
+                            alertRuleMessage: e.target.checked ? (question.alertRuleMessage ?? "") : question.alertRuleMessage,
+                            alertRuleTriggerCondition: e.target.checked ? (question.alertRuleTriggerCondition ?? "nc") : question.alertRuleTriggerCondition,
+                            alertRuleShowOnHomePage: e.target.checked ? (question.alertRuleShowOnHomePage ?? true) : question.alertRuleShowOnHomePage,
+                          })
+                        }
+                      />
+                      Exibir cartão de alerta quando não conforme?
+                    </label>
+
+                    {question.alertRuleEnabled && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm">
+                          <span>Cor do cartão</span>
+                          <select
+                            value={question.alertRuleColor ?? "#ef4444"}
+                            onChange={(e) =>
+                              updateQuestion(question.id, { alertRuleColor: e.target.value })
+                            }
+                            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                          >
+                            <option value="#ef4444">Vermelho</option>
+                            <option value="#f59e0b">Âmbar/Laranja</option>
+                            <option value="#eab308">Amarelo</option>
+                            <option value="#dc2626">Vermelho Escuro</option>
+                            <option value="#ea580c">Laranja Escuro</option>
+                          </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1 text-sm">
+                          <span>Condição de acionamento</span>
+                          <select
+                            value={question.alertRuleTriggerCondition ?? "nc"}
+                            onChange={(e) =>
+                              updateQuestion(question.id, {
+                                alertRuleTriggerCondition: e.target.value as "ok" | "nc" | "always",
+                              })
+                            }
+                            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                          >
+                            <option value="nc">Quando Não Conforme</option>
+                            <option value="ok">Quando Conforme</option>
+                            <option value="always">Sempre</option>
+                          </select>
+                        </label>
+
+                        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+                          <span>Mensagem do alerta</span>
+                          <input
+                            value={question.alertRuleMessage ?? ""}
+                            onChange={(e) =>
+                              updateQuestion(question.id, { alertRuleMessage: e.target.value })
+                            }
+                            placeholder="Ex.: Atenção: esta variável foi marcada como não conforme"
+                            className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                          />
+                        </label>
+
+                        <label className="inline-flex items-center gap-2 text-sm sm:col-span-2">
+                          <input
+                            type="checkbox"
+                            className="accent-blue-500"
+                            checked={question.alertRuleShowOnHomePage ?? true}
+                            onChange={(e) =>
+                              updateQuestion(question.id, { alertRuleShowOnHomePage: e.target.checked })
+                            }
+                          />
+                          Exibir alerta na tela inicial
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Periodicidade da Variável */}
+                {question.variableEnabled && (
+                  <div className="mt-3 space-y-2 rounded-md border border-[var(--border)] bg-white p-3">
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-blue-500"
+                        checked={Boolean(question.variablePeriodicityEnabled)}
+                        onChange={(e) =>
+                          updateQuestion(question.id, {
+                            variablePeriodicityEnabled: e.target.checked,
+                            variablePeriodicityQuantity: e.target.checked ? (question.variablePeriodicityQuantity ?? 1) : question.variablePeriodicityQuantity,
+                            variablePeriodicityUnit: e.target.checked ? (question.variablePeriodicityUnit ?? "day") : question.variablePeriodicityUnit,
+                          })
+                        }
+                      />
+                      Definir periodicidade para esta variável?
+                    </label>
+
+                    {question.variablePeriodicityEnabled && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm">
+                          <span>Quantidade</span>
+                          <input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={question.variablePeriodicityQuantity ?? 1}
+                            onChange={(e) => {
+                              const value = Number(e.target.value);
+                              if (Number.isFinite(value)) {
+                                updateQuestion(question.id, { variablePeriodicityQuantity: value });
+                              }
+                            }}
+                            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                          />
+                        </label>
+
+                        <label className="flex flex-col gap-1 text-sm">
+                          <span>Unidade</span>
+                          <select
+                            value={question.variablePeriodicityUnit ?? "day"}
+                            onChange={(e) =>
+                              updateQuestion(question.id, {
+                                variablePeriodicityUnit: e.target.value as ChecklistPeriodicityUnit,
+                              })
+                            }
+                            className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                          >
+                            <option value="day">Dia</option>
+                            <option value="week">Semana</option>
+                            <option value="month">Mês</option>
+                          </select>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

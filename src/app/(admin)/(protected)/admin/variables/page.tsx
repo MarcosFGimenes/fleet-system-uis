@@ -15,6 +15,10 @@ import {
   ChecklistTemplate,
   ChecklistQuestionVariable,
 } from "@/types/checklist";
+import type {
+  VariablePeriodicityResult,
+  VariablePeriodicityItem,
+} from "@/lib/kpis/variable-periodicity";
 
 type VariableOption = {
   id: string; // templateId:questionId:variableName (unique identifier)
@@ -62,10 +66,42 @@ export default function VariablesAdminPage() {
     placa: "",
   });
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [variablePeriodicity, setVariablePeriodicity] =
+    useState<VariablePeriodicityResult | null>(null);
+  const [periodicityLoading, setPeriodicityLoading] = useState(false);
+  const [periodicityError, setPeriodicityError] = useState<string | null>(null);
 
   const machinesCol = useMemo(() => collection(db, "machines"), []);
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
+
+  const refreshPeriodicity = useCallback(async () => {
+    setPeriodicityLoading(true);
+    setPeriodicityError(null);
+    try {
+      const response = await fetch("/api/kpi/variable-periodicity", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        const message =
+          typeof payload?.error === "string"
+            ? payload.error
+            : "Falha ao carregar periodicidade de variáveis.";
+        throw new Error(message);
+      }
+      const data = (await response.json()) as VariablePeriodicityResult;
+      setVariablePeriodicity(data);
+    } catch (error) {
+      console.error("Failed to load variable periodicity", error);
+      setPeriodicityError(
+        (error as Error).message ?? "Falha ao carregar periodicidade de variáveis."
+      );
+    } finally {
+      setPeriodicityLoading(false);
+    }
+  }, []);
 
   // Carrega máquinas e templates
   useEffect(() => {
@@ -231,6 +267,10 @@ export default function VariablesAdminPage() {
     }
   }, [dataLoaded, fetchOccurrences]);
 
+  useEffect(() => {
+    refreshPeriodicity();
+  }, [refreshPeriodicity]);
+
   const formatVariableValue = (value: string | number | boolean | null, type: string): string => {
     if (value === null || value === undefined) {
       return "—";
@@ -360,6 +400,127 @@ export default function VariablesAdminPage() {
             />
           </div>
         </div>
+      </section>
+
+      {/* Seção de Periodicidade de Variáveis */}
+      <section className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Periodicidade de Variáveis</h2>
+          <button
+            type="button"
+            onClick={() => refreshPeriodicity()}
+            className="rounded-md border border-[var(--border)] bg-white px-3 py-1 text-sm font-medium text-[var(--text)] shadow-sm transition hover:bg-[var(--surface)] disabled:opacity-60"
+            disabled={periodicityLoading}
+          >
+            {periodicityLoading ? "Atualizando..." : "Atualizar"}
+          </button>
+        </div>
+
+        {periodicityError && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {periodicityError}
+          </div>
+        )}
+
+        {variablePeriodicity &&
+          variablePeriodicity.summary.totalTracked === 0 &&
+          !periodicityError && (
+            <div className="rounded-md border border-[var(--border)] bg-white p-4 text-sm text-[var(--muted)] shadow-sm">
+              Nenhuma variável com periodicidade configurada.
+            </div>
+          )}
+
+        {variablePeriodicity && variablePeriodicity.summary.totalTracked > 0 && (
+          <div
+            className={`rounded-md border p-4 ${
+              variablePeriodicity.summary.nonCompliant > 0
+                ? "border-red-200 bg-red-50"
+                : "border-emerald-200 bg-emerald-50"
+            }`}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3
+                  className={`text-base font-semibold ${
+                    variablePeriodicity.summary.nonCompliant > 0
+                      ? "text-red-700"
+                      : "text-emerald-700"
+                  }`}
+                >
+                  {variablePeriodicity.summary.nonCompliant > 0
+                    ? "Atenção: variáveis fora da periodicidade mínima"
+                    : "Todas as variáveis estão dentro da periodicidade"}
+                </h3>
+                <p
+                  className={`text-sm ${
+                    variablePeriodicity.summary.nonCompliant > 0
+                      ? "text-red-600"
+                      : "text-emerald-600"
+                  }`}
+                >
+                  {variablePeriodicity.summary.nonCompliant > 0
+                    ? `${variablePeriodicity.summary.nonCompliant} de ${variablePeriodicity.summary.totalTracked} itens estão atrasados.`
+                    : `${variablePeriodicity.summary.totalTracked} itens monitorados estão em conformidade.`}
+                </p>
+              </div>
+
+              {variablePeriodicity.summary.nonCompliant > 0 && (
+                <span className="inline-flex items-center gap-2 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                  Fora da periodicidade
+                </span>
+              )}
+            </div>
+
+            {variablePeriodicity.items
+              .filter((item) => item.status === "non_compliant")
+              .length > 0 && (
+              <div className="mt-3 space-y-3">
+                {variablePeriodicity.items
+                  .filter((item) => item.status === "non_compliant")
+                  .map((item) => (
+                    <div
+                      key={`${item.variableName}-${item.machineId}-${item.templateId}-${item.questionId}`}
+                      className="rounded-md border border-red-200 bg-white p-3 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-red-700">{item.variableName}</p>
+                          <p className="text-xs text-red-600">
+                            {item.templateName} • {item.machineName ?? item.machinePlaca ?? item.machineId}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                          Fora da periodicidade
+                        </span>
+                      </div>
+                      <div className="mt-2 space-y-1 text-xs text-red-600">
+                        <p>
+                          Último envio:{" "}
+                          {item.lastSubmissionAt
+                            ? new Date(item.lastSubmissionAt).toLocaleString("pt-BR")
+                            : "Nunca"}
+                        </p>
+                        <p>
+                          Exigido: 1 envio a cada {item.quantity}{" "}
+                          {item.quantity > 1
+                            ? item.unit === "day"
+                              ? "dias"
+                              : item.unit === "week"
+                                ? "semanas"
+                                : "meses"
+                            : item.unit === "day"
+                              ? "dia"
+                              : item.unit === "week"
+                                ? "semana"
+                                : "mês"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {filter.variableId !== "all" && (

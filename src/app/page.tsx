@@ -2,11 +2,36 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import type { VariableAlertsResult } from "@/lib/kpis/variable-alerts";
 
 export default function HomePage() {
   const router = useRouter();
   const [tag, setTag] = useState("");
+  const [variableAlerts, setVariableAlerts] = useState<VariableAlertsResult | null>(null);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+
+  const refreshVariableAlerts = useCallback(async () => {
+    setAlertsLoading(true);
+    try {
+      const response = await fetch("/api/kpi/variable-alerts", {
+        method: "GET",
+        cache: "no-store",
+      });
+      if (response.ok) {
+        const data = (await response.json()) as VariableAlertsResult;
+        setVariableAlerts(data);
+      }
+    } catch (error) {
+      console.error("Failed to load variable alerts", error);
+    } finally {
+      setAlertsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshVariableAlerts();
+  }, [refreshVariableAlerts]);
 
   const goToChecklist = () => {
     const t = tag.trim();
@@ -43,6 +68,58 @@ export default function HomePage() {
               Centralize o controle diário da frota: cadastre máquinas, gere QR Codes,
               colete checklists em campo e acompanhe inconformidades em tempo real.
             </p>
+
+            {/* Alertas de Variáveis Não Conformes */}
+            {variableAlerts && variableAlerts.items.length > 0 && (
+              <div className="mt-6 space-y-3">
+                {variableAlerts.items.slice(0, 5).map((alert, index) => (
+                  <div
+                    key={`${alert.variableName}-${alert.machineId}-${alert.templateId}-${alert.questionId}-${index}`}
+                    className="rounded-xl border p-4"
+                    style={{
+                      borderColor: `${alert.alertRule.color}40`,
+                      backgroundColor: `${alert.alertRule.color}10`,
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="mt-1 h-2 w-2 rounded-full"
+                        style={{ backgroundColor: alert.alertRule.color }}
+                      />
+                      <div className="flex-1">
+                        <p
+                          className="font-semibold text-sm"
+                          style={{ color: alert.alertRule.color }}
+                        >
+                          {alert.variableName}
+                        </p>
+                        <p
+                          className="mt-1 text-xs"
+                          style={{ color: alert.alertRule.color }}
+                        >
+                          {alert.alertRule.message}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--hint)]">
+                          {alert.templateName} • {alert.machineName ?? alert.machinePlaca ?? alert.machineId}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--hint)]">
+                          {new Date(alert.responseDate).toLocaleString("pt-BR")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {variableAlerts.items.length > 5 && (
+                  <p className="text-xs text-[var(--hint)] text-center">
+                    E mais {variableAlerts.items.length - 5} alerta(s). Ver{" "}
+                    <Link href="/admin/variables" className="text-[var(--primary)] underline">
+                      variáveis
+                    </Link>
+                    {" "}para mais detalhes.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Acesso rápido: TAG */}
             <div className="mt-6 rounded-2xl light-card p-4">
