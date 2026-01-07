@@ -1313,60 +1313,159 @@ export default function ChecklistByTagPage() {
       {/* Modal de seleção de checklist */}
       {shouldShowModal && (
         <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="template-modal-title"
+          onClick={(e: React.MouseEvent<HTMLDivElement>) => {
+            // Fecha ao clicar no backdrop (opcional - pode remover se não quiser)
+            if (e.target === e.currentTarget) {
+              // Não fecha automaticamente - requer seleção
+            }
+          }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] shadow-xl border border-[var(--border)]">
-            <div className="p-6 space-y-4">
-              <div className="space-y-2">
-                <h2
-                  id="template-modal-title"
-                  className="text-xl font-semibold text-[var(--text)]"
-                >
-                  Selecione o tipo de checklist
-                </h2>
-                <p className="text-sm text-[var(--hint)]">
-                  Escolha o checklist mais adequado para a máquina antes de começar.
-                </p>
+          <div className="w-full max-w-lg rounded-2xl bg-[var(--surface)] shadow-2xl border border-[var(--border)] transform transition-all">
+            {/* Cabeçalho do modal */}
+            <div className="bg-gradient-to-r from-[var(--primary)] to-[var(--primary-700)] p-6 rounded-t-2xl">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2
+                    id="template-modal-title"
+                    className="text-2xl font-bold text-white mb-1"
+                  >
+                    Selecione o Checklist
+                  </h2>
+                  <p className="text-sm text-blue-100/90">
+                    Escolha o tipo de checklist adequado para esta máquina
+                  </p>
+                </div>
               </div>
+            </div>
 
+            {/* Informações da máquina */}
+            {machine && (
+              <div className="px-6 pt-4 pb-2 border-b border-[var(--border)]">
+                <div className="flex items-center gap-2 text-sm text-[var(--hint)]">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span className="font-medium text-[var(--text)]">{machine.modelo}</span>
+                  <span className="text-[var(--hint)]">•</span>
+                  <span>TAG: {machine.tag}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Lista de templates */}
+            <div className="p-6">
               {templates.length > 0 ? (
-                <div className="space-y-2">
-                  {templates.map((template) => (
+                <div className="space-y-3">
+                  {templates.map((template: ChecklistTemplate) => (
                     <button
                       key={template.id}
                       type="button"
                       onClick={() => handleTemplateSelect(template.id)}
-                      className="w-full rounded-lg border-2 border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-left transition-all hover:border-[var(--primary)] hover:bg-[var(--primary-50)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
+                      className="w-full group relative rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] p-5 text-left transition-all duration-200 hover:border-[var(--primary)] hover:bg-[var(--primary-50)] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 active:scale-[0.98] transform"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-[var(--text)]">{template.title}</p>
-                          <p className="text-xs text-[var(--hint)]">Versão {template.version}</p>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[var(--primary-50)] group-hover:bg-[var(--primary)] flex items-center justify-center transition-colors duration-200">
+                              <svg
+                                className="w-5 h-5 text-[var(--primary)] group-hover:text-white transition-colors duration-200"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-base text-[var(--text)] group-hover:text-[var(--primary)] transition-colors duration-200">
+                                {template.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]">
+                                  v{template.version}
+                                </span>
+                                {template.questions && (
+                                  <span className="text-xs text-[var(--hint)]">
+                                    {template.questions.length} {template.questions.length === 1 ? 'pergunta' : 'perguntas'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <svg
-                          className="h-5 w-5 text-[var(--primary)]"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
+                        <div className="flex-shrink-0">
+                          <svg
+                            className="w-5 h-5 text-[var(--primary)] group-hover:translate-x-1 transition-transform duration-200"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </div>
                       </div>
                     </button>
                   ))}
                 </div>
               ) : (
-                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
-                  <p className="text-sm text-[var(--hint)]">
-                    Nenhum checklist está vinculado a esta máquina no momento.
+                <div className="rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface)] p-8 text-center">
+                  <svg
+                    className="w-12 h-12 text-[var(--hint)] mx-auto mb-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <p className="text-sm font-medium text-[var(--text)] mb-1">
+                    Nenhum checklist disponível
+                  </p>
+                  <p className="text-xs text-[var(--hint)]">
+                    Esta máquina não possui checklists vinculados no momento.
                   </p>
                 </div>
               )}
@@ -1944,3 +2043,6 @@ export default function ChecklistByTagPage() {
     </div>
   );
 }
+
+
+
