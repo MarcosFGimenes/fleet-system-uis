@@ -378,6 +378,7 @@ export default function ChecklistByTagPage() {
   const [machine, setMachine] = useState<Machine | null>(null);
   const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [showTemplateModal, setShowTemplateModal] = useState<boolean>(true);
 
   const [matricula, setMatricula] = useState("");
   const [km, setKm] = useState("");
@@ -552,7 +553,12 @@ export default function ChecklistByTagPage() {
             }
           }
           setTemplates(fetched);
-          if (fetched.length > 0) setSelectedTemplateId(fetched[0].id);
+          // Não seleciona automaticamente - aguarda seleção no modal
+          if (fetched.length > 0) {
+            setShowTemplateModal(true);
+          } else {
+            setTemplates([]);
+          }
         } else {
           setTemplates([]);
         }
@@ -1292,47 +1298,97 @@ export default function ChecklistByTagPage() {
   const submitDisabled =
     !currentTemplate || userLookup.state !== "found" || !userHasAccess || isSubmitting;
 
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setShowTemplateModal(false);
+  };
+
+  // Se não há templates, não mostra o modal
+  const shouldShowModal = showTemplateModal && state === "ready" && machine && templates.length > 0;
+  // Conteúdo principal só aparece se há template selecionado e modal não está aberto
+  const shouldShowContent = !showTemplateModal && selectedTemplateId && currentTemplate;
+
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] p-4">
-      <div className="mx-auto max-w-3xl space-y-6">
-        <section className="rounded-2xl bg-gradient-to-r from-blue-600 to-blue-500 p-5 text-blue-50 shadow-sm">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-100/80">
-              Tipo de checklist
-            </p>
-            <h2 className="text-xl font-semibold">Selecione o checklist antes de começar</h2>
-            <p className="text-sm text-blue-100/90">
-              Escolha o checklist mais adequado para a máquina antes de preencher os dados.
-            </p>
-          </div>
-
-          <div className="mt-4">
-            {templates.length > 0 ? (
-              <>
-                <label htmlFor="checklist-template" className="sr-only">
-                  Tipo de checklist
-                </label>
-                <select
-                  id="checklist-template"
-                  value={selectedTemplateId}
-                  onChange={(event) => setSelectedTemplateId(event.target.value)}
-                  className="w-full rounded-full border border-white/20 bg-white/95 px-5 py-3 text-base font-semibold text-blue-900 shadow-inner transition focus:border-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600"
-                  aria-label="Selecionar tipo de checklist"
+      {/* Modal de seleção de checklist */}
+      {shouldShowModal && (
+        <div
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="template-modal-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] shadow-xl border border-[var(--border)]">
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <h2
+                  id="template-modal-title"
+                  className="text-xl font-semibold text-[var(--text)]"
                 >
+                  Selecione o tipo de checklist
+                </h2>
+                <p className="text-sm text-[var(--hint)]">
+                  Escolha o checklist mais adequado para a máquina antes de começar.
+                </p>
+              </div>
+
+              {templates.length > 0 ? (
+                <div className="space-y-2">
                   {templates.map((template) => (
-                    <option key={template.id} value={template.id} className="text-blue-900">
-                      {template.title} (v{template.version})
-                    </option>
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => handleTemplateSelect(template.id)}
+                      className="w-full rounded-lg border-2 border-[var(--border)] bg-[var(--bg)] px-4 py-3 text-left transition-all hover:border-[var(--primary)] hover:bg-[var(--primary-50)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-[var(--text)]">{template.title}</p>
+                          <p className="text-xs text-[var(--hint)]">Versão {template.version}</p>
+                        </div>
+                        <svg
+                          className="h-5 w-5 text-[var(--primary)]"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </button>
                   ))}
-                </select>
-              </>
-            ) : (
-              <p className="rounded-full bg-white/15 px-5 py-3 text-sm font-medium text-blue-100">
-                Nenhum checklist está vinculado a esta máquina no momento.
-              </p>
-            )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 text-center">
+                  <p className="text-sm text-[var(--hint)]">
+                    Nenhum checklist está vinculado a esta máquina no momento.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
-        </section>
+        </div>
+      )}
+
+      {/* Mensagem quando não há templates */}
+      {state === "ready" && machine && templates.length === 0 && !showTemplateModal && (
+        <div className="min-h-screen grid place-items-center">
+          <div className="mx-auto max-w-md rounded-xl light-card p-6 text-center">
+            <p className="text-[var(--danger)] font-semibold">
+              Nenhum checklist está vinculado a esta máquina no momento.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Conteúdo principal - só exibe após seleção do template */}
+      {shouldShowContent && (
+        <div className="mx-auto max-w-3xl space-y-6">
 
         {/* Cabeçalho */}
         <header className="space-y-1">
@@ -1875,7 +1931,8 @@ export default function ChecklistByTagPage() {
             {isSubmitting ? <Spinner /> : "Enviar Checklist"}
           </button>
         </div>
-      </div>
+        </div>
+      )}
 
       {notification.show && (
         <Notification
@@ -1887,6 +1944,3 @@ export default function ChecklistByTagPage() {
     </div>
   );
 }
-
-
-
