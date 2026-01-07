@@ -1837,9 +1837,12 @@ export default function ChecklistByTagPage() {
                               type="number"
                               step={1}
                               value={
-                                typeof answers[question.id]?.variableValue === "number"
-                                  ? answers[question.id]?.variableValue
-                                  : ""
+                                (() => {
+                                  const val = answers[question.id]?.variableValue;
+                                  return typeof val === "number" && val !== null && !isNaN(val)
+                                    ? (val as number)
+                                    : ("");
+                                })()
                               }
                               onChange={(e) =>
                                 setVariableValue(
@@ -1855,9 +1858,12 @@ export default function ChecklistByTagPage() {
                               type="number"
                               step="any"
                               value={
-                                typeof answers[question.id]?.variableValue === "number"
-                                  ? answers[question.id]?.variableValue
-                                  : ""
+                                (() => {
+                                  const val = answers[question.id]?.variableValue;
+                                  return typeof val === "number" && val !== null && !isNaN(val)
+                                    ? (val as number)
+                                    : ("");
+                                })()
                               }
                               onChange={(e) =>
                                 setVariableValue(
@@ -1920,7 +1926,7 @@ export default function ChecklistByTagPage() {
                             <label className="inline-flex items-center gap-2">
                               <input
                                 type="checkbox"
-                                checked={Boolean(answers[question.id]?.variableValue)}
+                                checked={answers[question.id]?.variableValue === true}
                                 onChange={(e) => setVariableValue(question.id, e.target.checked)}
                                 className="accent-[var(--primary)]"
                               />
