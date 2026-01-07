@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { href: "/admin/machines", label: "Máquinas", badge: "Cadastros" },
   { href: "/admin/templates", label: "Templates", badge: "Modelos" },
   { href: "/admin/responses", label: "Checklists", badge: "Histórico" },
+  { href: "/admin/variables", label: "Variáveis Respondidas", badge: "Dados" },
   { href: "/admin/non-conformities", label: "Não conformidades", badge: "NCs" },
   { href: "/admin/users", label: "Usuários" },
 ];
