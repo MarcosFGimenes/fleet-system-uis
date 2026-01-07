@@ -70,6 +70,7 @@ type AnswerDraft = {
   response?: "ok" | "nc" | "na";
   observation?: string;
   photos?: DraftPhoto[];
+  variableValue?: string | number | boolean | null;
 };
 
 type AnswerMap = Record<string, AnswerDraft>;
@@ -774,16 +775,42 @@ export default function ChecklistByTagPage() {
      Helpers
   ============================ */
   const setResponse = (questionId: string, value: "ok" | "nc" | "na") => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: { ...(prev[questionId] ?? { questionId }), response: value },
-    }));
+    setAnswers((prev) => {
+      const previous = prev[questionId] ?? { questionId };
+      // Se a variável estiver presente mas a condição não for atendida para o novo valor,
+      // limpamos o valor da variável para evitar envio indevido.
+      const question = currentTemplate?.questions.find((q) => q.id === questionId);
+      let nextVariableValue = previous.variableValue;
+      if (question?.variable) {
+        const shouldShow =
+          question.variable.condition === "always" ||
+          (question.variable.condition === "ok" && value === "ok") ||
+          (question.variable.condition === "nc" && value === "nc");
+        if (!shouldShow) {
+          nextVariableValue = undefined;
+        }
+      }
+      return {
+        ...prev,
+        [questionId]: {
+          ...previous,
+          response: value,
+          variableValue: nextVariableValue,
+        },
+      };
+    });
   };
 
   const setObservation = (questionId: string, value: string) => {
     setAnswers((prev) => ({
       ...prev,
       [questionId]: { ...(prev[questionId] ?? { questionId }), observation: value },
+    }));
+  };
+  const setVariableValue = (questionId: string, value: string | number | boolean | null) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: { ...(prev[questionId] ?? { questionId }), variableValue: value },
     }));
   };
 
@@ -982,6 +1009,24 @@ export default function ChecklistByTagPage() {
 
         const observationText = base.observation?.trim();
         if (observationText) answer.observation = observationText;
+
+        // Variável condicional
+        if (question.variable) {
+          const shouldAttach =
+            question.variable.condition === "always" ||
+            (question.variable.condition === "ok" && base.response === "ok") ||
+            (question.variable.condition === "nc" && base.response === "nc");
+          if (shouldAttach) {
+            const value = base.variableValue;
+            const hasValue =
+              typeof value === "boolean" ||
+              (typeof value === "number" && Number.isFinite(value)) ||
+              (typeof value === "string" && value.trim() !== "");
+            if (hasValue) {
+              answer.variableValue = value as any;
+            }
+          }
+        }
 
         const draftPhotos = base.photos ?? [];
         if (draftPhotos.length) {
@@ -1665,6 +1710,15 @@ export default function ChecklistByTagPage() {
                 const requirePhoto = photoRule === "required_nc";
                 const allowPhotos = photoRule !== "none";
                 const missingRequiredPhoto = requirePhoto && isNc && draftPhotos.length === 0;
+                const variable = question.variable;
+                const showVariable =
+                  Boolean(variable) &&
+                  Boolean(answers[question.id]?.response) &&
+                  (variable?.condition === "always" ||
+                    (variable?.condition === "ok" &&
+                      answers[question.id]?.response === "ok") ||
+                    (variable?.condition === "nc" &&
+                      answers[question.id]?.response === "nc"));
 
                 return (
                   <div key={question.id} className="rounded-lg border border-[var(--border)] p-4">
@@ -1772,6 +1826,109 @@ export default function ChecklistByTagPage() {
                           </ChoiceBtn>
                         </div>
                       </div>
+
+                      {showVariable && variable && (
+                        <div className="space-y-1">
+                          <label className="block text-sm text-[var(--hint)]">
+                            {variable.name}
+                          </label>
+                          {variable.type === "int" && (
+                            <input
+                              type="number"
+                              step={1}
+                              value={
+                                typeof answers[question.id]?.variableValue === "number"
+                                  ? answers[question.id]?.variableValue
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setVariableValue(
+                                  question.id,
+                                  e.target.value === "" ? null : Number(e.target.value),
+                                )
+                              }
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "decimal" && (
+                            <input
+                              type="number"
+                              step="any"
+                              value={
+                                typeof answers[question.id]?.variableValue === "number"
+                                  ? answers[question.id]?.variableValue
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setVariableValue(
+                                  question.id,
+                                  e.target.value === "" ? null : Number(e.target.value),
+                                )
+                              }
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "text" && (
+                            <input
+                              type="text"
+                              value={
+                                typeof answers[question.id]?.variableValue === "string"
+                                  ? (answers[question.id]?.variableValue as string)
+                                  : ""
+                              }
+                              onChange={(e) => setVariableValue(question.id, e.target.value)}
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "long_text" && (
+                            <textarea
+                              rows={3}
+                              value={
+                                typeof answers[question.id]?.variableValue === "string"
+                                  ? (answers[question.id]?.variableValue as string)
+                                  : ""
+                              }
+                              onChange={(e) => setVariableValue(question.id, e.target.value)}
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "date" && (
+                            <input
+                              type="date"
+                              value={
+                                typeof answers[question.id]?.variableValue === "string"
+                                  ? (answers[question.id]?.variableValue as string)
+                                  : ""
+                              }
+                              onChange={(e) => setVariableValue(question.id, e.target.value)}
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "time" && (
+                            <input
+                              type="time"
+                              value={
+                                typeof answers[question.id]?.variableValue === "string"
+                                  ? (answers[question.id]?.variableValue as string)
+                                  : ""
+                              }
+                              onChange={(e) => setVariableValue(question.id, e.target.value)}
+                              className="w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                            />
+                          )}
+                          {variable.type === "boolean" && (
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(answers[question.id]?.variableValue)}
+                                onChange={(e) => setVariableValue(question.id, e.target.checked)}
+                                className="accent-[var(--primary)]"
+                              />
+                              <span className="text-sm text-[var(--text)]">Sim</span>
+                            </label>
+                          )}
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <label className="block text-sm text-[var(--hint)]">Observações</label>

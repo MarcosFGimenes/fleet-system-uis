@@ -8,12 +8,18 @@ import {
   ChecklistTemplate,
   ChecklistTemplateActorConfig,
   ChecklistTemplateHeader,
+  ChecklistVariableCondition,
+  ChecklistVariableType,
 } from "@/types/checklist";
 
 type QuestionDraft = {
   id: string;
   text: string;
   photoRule: ChecklistPhotoRule;
+  variableEnabled?: boolean;
+  variableName?: string;
+  variableType?: ChecklistVariableType;
+  variableCondition?: ChecklistVariableCondition;
 };
 
 export type TemplateFormPayload = {
@@ -82,6 +88,10 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         : question.requiresPhoto
         ? "required_nc"
         : "optional",
+      variableEnabled: Boolean(question.variable),
+      variableName: question.variable?.name ?? "",
+      variableType: question.variable?.type ?? undefined,
+      variableCondition: question.variable?.condition ?? undefined,
     }));
   });
 
@@ -168,12 +178,31 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         type: actorKind,
         version,
         isActive,
-        questions: clean.map((question) => ({
-          id: question.id,
-          text: question.text,
-          photoRule: question.photoRule,
-          requiresPhoto: question.photoRule === "required_nc",
-        } satisfies ChecklistQuestion)),
+        questions: clean.map((question) => {
+          const base: ChecklistQuestion = {
+            id: question.id,
+            text: question.text,
+            photoRule: question.photoRule,
+            requiresPhoto: question.photoRule === "required_nc",
+          };
+          // Anexa variável somente quando habilitada e com dados válidos
+          const name = (question.variableName ?? "").trim();
+          if (
+            question.variableEnabled &&
+            name &&
+            question.variableType &&
+            (question.variableCondition === "ok" ||
+              question.variableCondition === "nc" ||
+              question.variableCondition === "always")
+          ) {
+            base.variable = {
+              name,
+              type: question.variableType,
+              condition: question.variableCondition,
+            };
+          }
+          return base;
+        }),
         header: normalizedHeader,
         actor: normalizedActor,
       },
@@ -475,6 +504,84 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
                 >
                   Remover
                 </button>
+              </div>
+
+              <div className="mt-3 space-y-2 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3">
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="accent-blue-500"
+                    checked={Boolean(question.variableEnabled)}
+                    onChange={(e) =>
+                      updateQuestion(question.id, {
+                        variableEnabled: e.target.checked,
+                        // Se habilitar agora, definir defaults sensatos
+                        variableType: e.target.checked
+                          ? (question.variableType ?? "text")
+                          : question.variableType,
+                        variableCondition: e.target.checked
+                          ? (question.variableCondition ?? "always")
+                          : question.variableCondition,
+                      })
+                    }
+                  />
+                  Incluir variável?
+                </label>
+
+                {question.variableEnabled && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span>Nome da Variável</span>
+                      <input
+                        value={question.variableName ?? ""}
+                        onChange={(e) =>
+                          updateQuestion(question.id, { variableName: e.target.value })
+                        }
+                        placeholder="Ex.: Quantidade de graxa utilizada"
+                        className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span>Tipo da Variável</span>
+                      <select
+                        value={question.variableType ?? "text"}
+                        onChange={(e) =>
+                          updateQuestion(question.id, {
+                            variableType: e.target.value as ChecklistVariableType,
+                          })
+                        }
+                        className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                      >
+                        <option value="int">Número Inteiro</option>
+                        <option value="decimal">Número Decimal</option>
+                        <option value="text">Texto Curto</option>
+                        <option value="long_text">Texto Longo</option>
+                        <option value="date">Data</option>
+                        <option value="time">Hora</option>
+                        <option value="boolean">Booleano</option>
+                      </select>
+                    </label>
+
+                    <label className="flex flex-col gap-1 text-sm">
+                      <span>Condição de Exibição</span>
+                      <select
+                        value={question.variableCondition ?? "always"}
+                        onChange={(e) =>
+                          updateQuestion(question.id, {
+                            variableCondition:
+                              e.target.value as ChecklistVariableCondition,
+                          })
+                        }
+                        className="rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
+                      >
+                        <option value="ok">Se a resposta for "Conforme"</option>
+                        <option value="nc">Se a resposta for "Não Conforme"</option>
+                        <option value="always">Sempre</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
           ))}

@@ -2,6 +2,34 @@ import type { Timestamp } from "firebase/firestore";
 
 export type ChecklistPhotoRule = "none" | "optional" | "required_nc";
 
+export type ChecklistVariableType =
+  | "int"
+  | "decimal"
+  | "text"
+  | "long_text"
+  | "date"
+  | "time"
+  | "boolean";
+
+export type ChecklistVariableCondition = "ok" | "nc" | "always";
+
+export interface ChecklistQuestionVariable {
+  /**
+   * Rótulo exibido ao operador quando a variável for solicitada.
+   * Ex.: "Quantidade de graxa utilizada"
+   */
+  name: string;
+  /** Tipo do valor que será solicitado. */
+  type: ChecklistVariableType;
+  /**
+   * Condição de exibição do campo para o operador:
+   * - 'ok': quando marcar Conforme
+   * - 'nc': quando marcar Não Conforme
+   * - 'always': sempre
+   */
+  condition: ChecklistVariableCondition;
+}
+
 export interface ChecklistQuestion {
   id: string;
   text: string;
@@ -11,6 +39,12 @@ export interface ChecklistQuestion {
    * dados antigos, mantemos o campo `requiresPhoto` que será derivado deste.
    */
   photoRule?: ChecklistPhotoRule;
+  /**
+   * Configuração opcional de variável associada à pergunta.
+   * Quando presente, a interface do usuário poderá solicitar um valor extra
+   * conforme a condição definida.
+   */
+  variable?: ChecklistQuestionVariable;
   /**
    * @deprecated Usado apenas para manter compatibilidade com registros
    *             existentes. Utilize `photoRule`.
@@ -80,6 +114,14 @@ export interface ChecklistAnswer {
   photoUrl?: string;
   observation?: string;
   recurrence?: ChecklistAnswerRecurrence;
+  /**
+   * Valor fornecido para a variável condicional (quando aplicável).
+   * - Para tipos numéricos: number
+   * - Para texto/long_text: string
+   * - Para date/time: string (ISO ou 'YYYY-MM-DD' / 'HH:mm')
+   * - Para boolean: boolean
+   */
+  variableValue?: string | number | boolean | null;
 }
 
 export type NonConformityStatus = "open" | "in_progress" | "resolved";
