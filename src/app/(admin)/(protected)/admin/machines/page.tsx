@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -132,7 +132,10 @@ export default function MachinesAdminPage() {
           <div className="flex flex-col gap-8 md:flex-row md:items-center">
             <QrCodeGenerator
               value={qrValueFor(ui.selected)}
-              label={`TAG: ${ui.selected.tag}`}
+              captionLines={[
+                ui.selected.placa && ui.selected.placa.trim().length > 0 ? ui.selected.placa : "SEM PLACA",
+                ui.selected.tag,
+              ]}
               fileName={`qr-${ui.selected.tag}`}
             />
             <div className="space-y-3 text-sm text-[var(--muted)]">
