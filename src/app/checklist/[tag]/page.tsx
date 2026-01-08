@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 /* eslint-disable @next/next/no-img-element */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -200,7 +200,7 @@ const resolveBlobExtension = (blob: Blob, fallback = "png"): string => {
   return fallback;
 };
 
-const buildImgbbFilename = (segments: string[], extension: string): string => {
+const buildUploadFilename = (segments: string[], extension: string): string => {
   const sanitizedSegments = segments
     .map((segment) => sanitizeFilenameSegment(segment))
     .filter((segment) => Boolean(segment));
@@ -209,7 +209,7 @@ const buildImgbbFilename = (segments: string[], extension: string): string => {
   return `${base}.${safeExtension}`;
 };
 
-const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise<string> => {
+const uploadImageToR2 = async (image: Blob | File, filename: string): Promise<string> => {
   const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_.]/g, "-");
   const finalFilename = sanitizedFilename || "upload.png";
   const baseName = finalFilename.replace(/\.[^./]+$/, "");
@@ -221,13 +221,13 @@ const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise
 
   let response: Response;
   try {
-    response = await fetch("/api/imgbb/upload", {
+    response = await fetch("/api/images/upload", {
       method: "POST",
       body: formData,
     });
   } catch (networkError) {
-    console.error("Falha de rede ao enviar imagem para o ImgBB", networkError);
-    throw new Error("IMGBB_UPLOAD_NETWORK_ERROR");
+    console.error("Falha de rede ao enviar imagem para o R2", networkError);
+    throw new Error("R2_UPLOAD_NETWORK_ERROR");
   }
 
   type UploadResponse = { url?: string; error?: string };
@@ -240,14 +240,14 @@ const uploadImageToImgbb = async (image: Blob | File, filename: string): Promise
 
   if (!response.ok) {
     console.error("Resposta inválida ao enviar imagem", { status: response.status, payload });
-    throw new Error("IMGBB_UPLOAD_FAILED");
+    throw new Error("R2_UPLOAD_FAILED");
   }
 
   const resolvedUrl = payload?.url;
 
   if (!resolvedUrl) {
     console.error("Resposta da API de upload sem URL", payload);
-    throw new Error("IMGBB_UPLOAD_NO_URL");
+    throw new Error("R2_UPLOAD_NO_URL");
   }
 
   return resolvedUrl;
@@ -1034,11 +1034,11 @@ export default function ChecklistByTagPage() {
           for (const draft of draftPhotos) {
             try {
               const extension = resolveBlobExtension(draft.file, "jpg");
-              const filename = buildImgbbFilename(
+              const filename = buildUploadFilename(
                 [machine.id, currentTemplate.id, uploadBatchId, question.id, draft.id],
                 extension,
               );
-              const url = await uploadImageToImgbb(draft.file, filename);
+              const url = await uploadImageToR2(draft.file, filename);
               photoUrls.push(url);
             } catch (error) {
               console.error("Erro ao enviar foto do checklist", error);
@@ -1137,11 +1137,11 @@ export default function ChecklistByTagPage() {
       ) => {
         const blob = dataUrlToBlob(dataUrl);
         const extension = resolveBlobExtension(blob, "png");
-        const filename = buildImgbbFilename(
+        const filename = buildUploadFilename(
           [machine.id, currentTemplate.id, uploadBatchId, "signatures", role],
           extension,
         );
-        return uploadImageToImgbb(blob, filename);
+        return uploadImageToR2(blob, filename);
       };
 
       let operatorSignatureUrl: string | null = null;
