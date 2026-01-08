@@ -33,7 +33,10 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     const qrWidth = Number(svg.getAttribute("width") ?? "192") || 192;
     const qrHeight = Number(svg.getAttribute("height") ?? "192") || 192;
 
-    const lines = captionLines.map((line) => line.trim()).filter(Boolean);
+    const rawLines = captionLines.map((line) => line.trim()).filter(Boolean);
+    const lines = rawLines.map((line, idx) =>
+      idx === 0 ? `Placa: ${line}` : idx === 1 ? `Tag: ${line}` : line
+    );
 
     const padding = 24;
     const gap = lines.length > 0 ? 14 : 0;
@@ -110,18 +113,21 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
           {captionLines
             .map((line) => line.trim())
             .filter(Boolean)
-            .map((line, idx) => (
-              <p
-                key={`${idx}-${line}`}
-                className={
-                  idx === 0
-                    ? "text-base font-semibold text-[var(--text)]"
-                    : "text-sm font-medium text-[var(--muted)]"
-                }
-              >
-                {line}
-              </p>
-            ))}
+            .map((line, idx) => {
+              const display = idx === 0 ? `Placa: ${line}` : idx === 1 ? `Tag: ${line}` : line;
+              return (
+                <p
+                  key={`${idx}-${display}`}
+                  className={
+                    idx === 0
+                      ? "text-base font-semibold text-[var(--text)]"
+                      : "text-sm font-medium text-[var(--muted)]"
+                  }
+                >
+                  {display}
+                </p>
+              );
+            })}
         </div>
       )}
       <button
