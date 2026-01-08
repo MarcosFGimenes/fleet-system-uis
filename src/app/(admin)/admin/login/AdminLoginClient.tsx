@@ -57,7 +57,8 @@ export default function AdminLoginClient({ redirectTo }: AdminLoginClientProps) 
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      // Sessão anônima (usada para checklist público) não deve liberar o admin.
+      if (user && !user.isAnonymous) {
         router.replace(safeRedirect);
       }
     });
