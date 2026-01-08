@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadPeriodicityCompliance } from "@/lib/kpis/periodicity";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function parseDate(value: string | null): Date | undefined {

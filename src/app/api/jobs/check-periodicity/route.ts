@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { loadPeriodicityCompliance } from "@/lib/kpis/periodicity";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TTL_MINUTES = 15;
