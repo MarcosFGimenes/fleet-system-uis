@@ -90,14 +90,14 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
 
     const padding = 24;
     // Espaço vertical entre o QR e o primeiro texto (título).
-    // Mantemos bem pequeno para evitar "vão" no adesivo.
-    const gap = lines.length > 0 ? 6 : 0;
+    // Mantemos mínimo para evitar "vão" no adesivo.
+    const gap = lines.length > 0 ? 2 : 0;
     const lineGap = 6;
     const fontFamily =
       "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
 
     // Tipografia pensada para adesivo (boa leitura em impressão)
-    const fontSizes = lines.map((_, idx) => (idx === 0 ? 14 : idx === 1 ? 20 : 16));
+    const fontSizes = lines.map((_, idx) => (idx === 0 ? 20 : idx === 1 ? 20 : 16));
     const textBlockHeight =
       lines.length === 0
         ? 0
@@ -164,6 +164,7 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
           value={value}
           size={qrSize}
           includeMargin
+          marginSize={2}
           level="H"
           bgColor="#ffffff"
           fgColor="#0b0f19"
@@ -181,7 +182,7 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
       </div>
       {captionLines.filter(Boolean).length > 0 && (
         <div className="text-center">
-          <p className="text-sm font-semibold text-[var(--text)] tracking-wide">{titleLine}</p>
+          <p className="text-base font-semibold text-[var(--text)] tracking-wide">{titleLine}</p>
           {captionLines
             .map((line) => line.trim())
             .filter(Boolean)
