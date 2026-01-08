@@ -23,7 +23,9 @@ export default function AdminLayoutShell({ children }: AdminLayoutShellProps) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      // IMPORTANTE: o app pode autenticar anonimamente para permitir acesso público ao checklist.
+      // O painel admin NÃO deve aceitar sessão anônima.
+      if (user && !user.isAnonymous) {
         setStatus("authenticated");
       } else {
         setStatus("redirecting");

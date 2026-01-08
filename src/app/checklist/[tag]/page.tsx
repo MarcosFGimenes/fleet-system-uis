@@ -18,6 +18,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { ensureAnonymousAuth } from "@/lib/ensureAnonymousAuth";
 import {
   Machine,
   resolveMachineActorKind,
@@ -523,6 +524,14 @@ export default function ChecklistByTagPage() {
     const load = async () => {
       try {
         setState("loading");
+
+        try {
+          await ensureAnonymousAuth();
+        } catch (authError) {
+          // Se o provedor anônimo não estiver habilitado no Firebase, seguimos
+          // e o Firestore pode negar as leituras — mas evitamos travar a UI.
+          console.error("Falha ao autenticar anonimamente para o checklist", authError);
+        }
 
         const machineQuery = query(
           machinesCol,

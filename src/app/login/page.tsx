@@ -4,6 +4,7 @@ import { useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { User } from "@/types/user";
+import { ensureAnonymousAuth } from "@/lib/ensureAnonymousAuth";
 
 export default function LoginPage() {
   const [matricula, setMatricula] = useState("");
@@ -21,6 +22,12 @@ export default function LoginPage() {
     setError("");
 
     try {
+      try {
+        await ensureAnonymousAuth();
+      } catch (authError) {
+        console.error("Falha ao autenticar anonimamente", authError);
+      }
+
       const q = query(
         collection(db, "users"),
         where("matricula", "==", matricula.trim())
