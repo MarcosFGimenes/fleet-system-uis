@@ -1444,14 +1444,14 @@ export default function ChecklistByTagPage() {
                       key={template.id}
                       type="button"
                       onClick={() => handleTemplateSelect(template.id)}
-                      className="w-full group relative rounded-xl border-2 border-[var(--border)] bg-[var(--bg)] p-5 text-left transition-all duration-200 hover:border-[var(--primary)] hover:bg-[var(--primary-50)] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 active:scale-[0.98] transform"
+                      className="w-full group relative rounded-xl border border-slate-200 bg-white p-5 text-left text-slate-900 shadow-sm transition-all duration-200 hover:border-[var(--primary)] hover:bg-[var(--primary)] hover:text-white hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 active:scale-[0.99] transform"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-2">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[var(--primary-50)] group-hover:bg-[var(--primary)] flex items-center justify-center transition-colors duration-200">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 text-[var(--primary)] group-hover:bg-white/20 group-hover:text-white flex items-center justify-center transition-colors duration-200">
                               <svg
-                                className="w-5 h-5 text-[var(--primary)] group-hover:text-white transition-colors duration-200"
+                                className="w-5 h-5 text-current transition-colors duration-200"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -1465,15 +1465,15 @@ export default function ChecklistByTagPage() {
                               </svg>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-base text-[var(--text)] group-hover:text-[var(--primary)] transition-colors duration-200">
+                              <p className="font-semibold text-base text-slate-900 group-hover:text-white transition-colors duration-200">
                                 {template.title}
                               </p>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-[var(--surface)] text-[var(--hint)] border border-[var(--border)]">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 group-hover:bg-white/20 group-hover:text-white group-hover:border-white/30 transition-colors duration-200">
                                   v{template.version}
                                 </span>
                                 {template.questions && (
-                                  <span className="text-xs text-[var(--hint)]">
+                                  <span className="text-xs text-slate-600 group-hover:text-white/90 transition-colors duration-200">
                                     {template.questions.length} {template.questions.length === 1 ? 'pergunta' : 'perguntas'}
                                   </span>
                                 )}
@@ -1483,7 +1483,7 @@ export default function ChecklistByTagPage() {
                         </div>
                         <div className="flex-shrink-0">
                           <svg
-                            className="w-5 h-5 text-[var(--primary)] group-hover:translate-x-1 transition-transform duration-200"
+                            className="w-5 h-5 text-[var(--primary)] group-hover:text-white group-hover:translate-x-1 transition-all duration-200"
                             fill="none"
                             viewBox="0 0 24 24"
                             stroke="currentColor"
