@@ -45,8 +45,8 @@ async function flushPromises() {
 }
 
 async function renderPage() {
-  const module = await import("@/app/(admin)/(protected)/admin/non-conformities/page");
-  const NonConformitiesAdminPage = module.default;
+  const pageModule = await import("@/app/(admin)/(protected)/admin/non-conformities/page");
+  const NonConformitiesAdminPage = pageModule.default;
 
   const container = document.createElement("div");
   document.body.appendChild(container);

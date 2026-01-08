@@ -31,10 +31,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Environment variables
 
-Create a `.env.local` file in the project root and define the credentials used by the client-side features. For image uploads, provide your ImgBB API key (only the server needs access, so the `NEXT_PUBLIC_` prefix is not required):
+Create a `.env.local` file in the project root and define the credentials used by the server-side features. For image uploads, configure Cloudflare R2 (S3 compatible API) and a public base URL (public bucket or custom domain):
 
 ```bash
-IMGBB_API_KEY=your_imgbb_api_key
+CLOUDFLARE_R2_ACCOUNT_ID=your_account_id
+CLOUDFLARE_R2_ACCESS_KEY_ID=your_r2_access_key_id
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+CLOUDFLARE_R2_BUCKET=your_bucket_name
+# Ex: https://your-public-domain.example.com  (recomendado)
+# ou https://<bucket>.r2.dev (se estiver usando bucket público via r2.dev)
+CLOUDFLARE_R2_PUBLIC_BASE_URL=https://your-public-base-url
+# Opcional (default: uploads)
+# CLOUDFLARE_R2_KEY_PREFIX=uploads
 ```
 
 After editing `.env.local`, restart the development server so the new variables are picked up.
