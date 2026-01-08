@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { mapNonConformityDoc } from "@/lib/firestore/nc";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/lib/kpis/nc";
 import type { NcAction, NonConformity } from "@/types/nonconformity";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_FETCH = 500;

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadVariablePeriodicity } from "@/lib/kpis/variable-periodicity";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const result = await loadVariablePeriodicity();
     return NextResponse.json(result);

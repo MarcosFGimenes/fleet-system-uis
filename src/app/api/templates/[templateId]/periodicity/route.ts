@@ -6,6 +6,7 @@ import type {
   ChecklistTemplatePeriodicity,
 } from "@/types/checklist";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function computeWindowDays(quantity: number, unit: ChecklistPeriodicityUnit): number {
@@ -122,6 +123,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ periodicity });
   } catch (error) {
     console.error(`PATCH /api/templates/${templateId}/periodicity failed`, error);
-    return NextResponse.json({ error: "Falha ao atualizar periodicidade" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Falha ao atualizar periodicidade";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -8,6 +8,7 @@ import {
 } from "@/lib/firestore/nc";
 import type { NcAction, NonConformity, Severity, TelemetryRef } from "@/types/nonconformity";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const AUDIT_LIMIT = 50;
