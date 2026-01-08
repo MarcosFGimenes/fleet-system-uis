@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 
 type Props = {
@@ -22,8 +22,54 @@ function escapeXml(value: string) {
     .replaceAll("'", "&apos;");
 }
 
+function svgTextToBase64DataUrl(svgText: string) {
+  // btoa não lida bem com unicode; usamos TextEncoder para garantir compatibilidade.
+  const bytes = new TextEncoder().encode(svgText);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
 export default function QrCodeGenerator({ value, captionLines = [], fileName = "qrcode" }: Props) {
   const svgId = useId();
+  const [larLogoSvgDataUrl, setLarLogoSvgDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/Logotipo_da_Lar_Cooperativa_Agroindustrial.svg", { cache: "force-cache" });
+        if (!res.ok) return;
+        const text = await res.text();
+        if (cancelled) return;
+        setLarLogoSvgDataUrl(svgTextToBase64DataUrl(text));
+      } catch {
+        // Se falhar, o QR ainda funciona sem logo.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const qrSize = 192;
+  const logoBoxSize = Math.max(38, Math.min(56, Math.round(qrSize * 0.23))); // ~23% do QR (seguro p/ leitura)
+
+  const larBadgeDataUrl = useMemo(() => {
+    if (!larLogoSvgDataUrl) return null;
+
+    // Badge “tipo WhatsApp Web”: círculo branco + logo central com padding.
+    // Usamos um SVG wrapper para garantir padding/forma sem depender do arquivo da logo.
+    const innerSize = 64; // área da logo dentro do badge (0..100)
+    const innerOffset = (100 - innerSize) / 2;
+    const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <circle cx="50" cy="50" r="48" fill="#ffffff"/>
+  <image href="${escapeXml(larLogoSvgDataUrl)}" x="${innerOffset}" y="${innerOffset}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet"/>
+</svg>`;
+
+    return svgTextToBase64DataUrl(badgeSvg);
+  }, [larLogoSvgDataUrl]);
 
   const handleDownload = () => {
     const svg = document.getElementById(svgId) as SVGSVGElement | null;
@@ -106,7 +152,25 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="rounded-md border border-[var(--border)] bg-white p-4 shadow-sm">
-        <QRCodeSVG id={svgId} value={value} size={192} includeMargin />
+        <QRCodeSVG
+          id={svgId}
+          value={value}
+          size={qrSize}
+          includeMargin
+          level="H"
+          bgColor="#ffffff"
+          fgColor="#0b0f19"
+          imageSettings={
+            larBadgeDataUrl
+              ? {
+                  src: larBadgeDataUrl,
+                  height: logoBoxSize,
+                  width: logoBoxSize,
+                  excavate: true,
+                }
+              : undefined
+          }
+        />
       </div>
       {captionLines.filter(Boolean).length > 0 && (
         <div className="text-center">
