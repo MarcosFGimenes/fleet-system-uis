@@ -89,7 +89,9 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     const lines = [titleLine, ...mappedLines].filter(Boolean);
 
     const padding = 24;
-    const gap = lines.length > 0 ? 14 : 0;
+    // Espaço vertical entre o QR e o primeiro texto (título).
+    // Mantemos bem pequeno para evitar "vão" no adesivo.
+    const gap = lines.length > 0 ? 6 : 0;
     const lineGap = 6;
     const fontFamily =
       "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
