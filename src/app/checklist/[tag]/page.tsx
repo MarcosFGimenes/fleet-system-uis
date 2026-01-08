@@ -1971,22 +1971,43 @@ export default function ChecklistByTagPage() {
                             )}
                           </div>
 
-                          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center text-sm text-[var(--hint)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]">
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              className="sr-only"
-                              onChange={(event) => {
-                                addPhotos(question.id, event.target.files);
-                                event.target.value = "";
-                              }}
-                            />
-                            <span className="font-semibold">Adicionar fotos</span>
-                            <span className="text-xs text-[var(--muted)]">
-                              Selecione uma ou mais imagens (.jpg, .png, .webp)
-                            </span>
-                          </label>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center text-sm text-[var(--hint)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="sr-only"
+                                aria-label="Tirar foto com a câmera"
+                                onChange={(event) => {
+                                  addPhotos(question.id, event.target.files);
+                                  event.target.value = "";
+                                }}
+                              />
+                              <span className="font-semibold">Tirar foto</span>
+                              <span className="text-xs text-[var(--muted)]">
+                                Abre a câmera (quando disponível)
+                              </span>
+                            </label>
+
+                            <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-center text-sm text-[var(--hint)] transition hover:border-[var(--primary)] hover:text-[var(--primary)]">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="sr-only"
+                                aria-label="Selecionar imagem dos arquivos"
+                                onChange={(event) => {
+                                  addPhotos(question.id, event.target.files);
+                                  event.target.value = "";
+                                }}
+                              />
+                              <span className="font-semibold">Selecionar dos arquivos</span>
+                              <span className="text-xs text-[var(--muted)]">
+                                Selecione uma ou mais imagens (.jpg, .png, .webp)
+                              </span>
+                            </label>
+                          </div>
 
                           {draftPhotos.length > 0 && (
                             <div className="flex flex-wrap gap-3">
