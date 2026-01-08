@@ -33,6 +33,7 @@ function svgTextToBase64DataUrl(svgText: string) {
 export default function QrCodeGenerator({ value, captionLines = [], fileName = "qrcode" }: Props) {
   const svgId = useId();
   const [larLogoSvgDataUrl, setLarLogoSvgDataUrl] = useState<string | null>(null);
+  const titleLine = "Checklist Digital";
 
   useEffect(() => {
     let cancelled = false;
@@ -82,9 +83,10 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     const qrHeight = Number(svg.getAttribute("height") ?? "192") || 192;
 
     const rawLines = captionLines.map((line) => line.trim()).filter(Boolean);
-    const lines = rawLines.map((line, idx) =>
-      idx === 0 ? `Placa: ${line}` : idx === 1 ? `Tag: ${line}` : line
+    const mappedLines = rawLines.map((line, idx) =>
+      idx === 0 ? `Placa: ${line}` : idx === 1 ? `TAG: ${line}` : line,
     );
+    const lines = [titleLine, ...mappedLines].filter(Boolean);
 
     const padding = 24;
     const gap = lines.length > 0 ? 14 : 0;
@@ -93,7 +95,7 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
       "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
 
     // Tipografia pensada para adesivo (boa leitura em impressão)
-    const fontSizes = lines.map((_, idx) => (idx === 0 ? 20 : 16));
+    const fontSizes = lines.map((_, idx) => (idx === 0 ? 14 : idx === 1 ? 20 : 16));
     const textBlockHeight =
       lines.length === 0
         ? 0
@@ -108,7 +110,8 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
       .map((line, idx) => {
         const fontSize = fontSizes[idx] ?? 16;
         currentY += fontSize;
-        const isPrimary = idx === 0;
+        const isTitle = idx === 0;
+        const isPrimary = idx === 1;
         const text = `
   <text
     x="${centerX}"
@@ -116,9 +119,9 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     text-anchor="middle"
     font-family="${escapeXml(fontFamily)}"
     font-size="${fontSize}"
-    font-weight="${isPrimary ? 700 : 600}"
-    fill="${isPrimary ? "#111827" : "#374151"}"
-    letter-spacing="${isPrimary ? "0.5" : "0.2"}"
+    font-weight="${isTitle ? 700 : isPrimary ? 700 : 600}"
+    fill="${isTitle ? "#111827" : isPrimary ? "#111827" : "#374151"}"
+    letter-spacing="${isTitle ? "0.6" : isPrimary ? "0.5" : "0.2"}"
   >${escapeXml(line)}</text>`;
         currentY += lineGap;
         return text;
@@ -176,11 +179,12 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
       </div>
       {captionLines.filter(Boolean).length > 0 && (
         <div className="text-center">
+          <p className="text-sm font-semibold text-[var(--text)] tracking-wide">{titleLine}</p>
           {captionLines
             .map((line) => line.trim())
             .filter(Boolean)
             .map((line, idx) => {
-              const display = idx === 0 ? `Placa: ${line}` : idx === 1 ? `Tag: ${line}` : line;
+              const display = idx === 0 ? `Placa: ${line}` : idx === 1 ? `TAG: ${line}` : line;
               return (
                 <p
                   key={`${idx}-${display}`}
