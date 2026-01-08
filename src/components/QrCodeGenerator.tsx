@@ -53,18 +53,20 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   }, []);
 
   const qrSize = 192;
-  const logoBoxSize = Math.max(38, Math.min(56, Math.round(qrSize * 0.23))); // ~23% do QR (seguro p/ leitura)
+  const logoBoxSize = Math.max(44, Math.min(62, Math.round(qrSize * 0.25))); // ~25% do QR (ainda seguro com nível H)
 
   const larBadgeDataUrl = useMemo(() => {
     if (!larLogoSvgDataUrl) return null;
 
-    // Badge “tipo WhatsApp Web”: círculo branco + logo central com padding.
-    // Usamos um SVG wrapper para garantir padding/forma sem depender do arquivo da logo.
-    const innerSize = 64; // área da logo dentro do badge (0..100)
+    // Badge “tipo WhatsApp Web”: fundo branco com cantos arredondados + logo central.
+    // Importante: NÃO usamos "excavate" (quadrado) para permitir cantos arredondados.
+    // A ideia é cobrir os módulos com um retângulo branco arredondado (visual de "buraco" arredondado).
+    const innerSize = 76; // logo maior (menos padding)
     const innerOffset = (100 - innerSize) / 2;
     const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-  <circle cx="50" cy="50" r="48" fill="#ffffff"/>
+  <rect x="6" y="6" width="88" height="88" rx="22" fill="#ffffff"/>
+  <rect x="6" y="6" width="88" height="88" rx="22" fill="none" stroke="#e5e7eb" stroke-width="2"/>
   <image href="${escapeXml(larLogoSvgDataUrl)}" x="${innerOffset}" y="${innerOffset}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet"/>
 </svg>`;
 
@@ -166,7 +168,7 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
                   src: larBadgeDataUrl,
                   height: logoBoxSize,
                   width: logoBoxSize,
-                  excavate: true,
+                  excavate: false,
                 }
               : undefined
           }
