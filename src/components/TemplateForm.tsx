@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -8,9 +8,7 @@ import {
   ChecklistTemplate,
   ChecklistTemplateActorConfig,
   ChecklistTemplateHeader,
-  ChecklistVariableAlertRule,
   ChecklistVariableCondition,
-  ChecklistVariablePeriodicity,
   ChecklistVariableType,
 } from "@/types/checklist";
 
@@ -116,6 +114,8 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       variablePeriodicityUnit: question.variable?.periodicity?.unit ?? "day",
     }));
   });
+  const [draggingQuestionId, setDraggingQuestionId] = useState<string | null>(null);
+  const [dragOverQuestionId, setDragOverQuestionId] = useState<string | null>(null);
 
   const [periodicityActive, setPeriodicityActive] = useState<boolean>(
     initial?.periodicity?.active ?? false,
@@ -149,6 +149,36 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
       ...prev,
       { id: crypto.randomUUID(), text: "", photoRule: "optional" },
     ]);
+  };
+
+  const reorderQuestion = (sourceId: string, targetId: string) => {
+    if (!sourceId || !targetId || sourceId === targetId) {
+      return;
+    }
+    setQuestions((prev) => {
+      const fromIndex = prev.findIndex((q) => q.id === sourceId);
+      const toIndex = prev.findIndex((q) => q.id === targetId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return prev;
+      }
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const moveQuestionBy = (id: string, delta: number) => {
+    setQuestions((prev) => {
+      const index = prev.findIndex((q) => q.id === id);
+      if (index < 0) return prev;
+      const nextIndex = index + delta;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      next.splice(nextIndex, 0, moved);
+      return next;
+    });
   };
 
   const updateQuestion = (id: string, patch: Partial<QuestionDraft>) => {
@@ -513,13 +543,83 @@ export default function TemplateForm({ initial, onSubmit, onCancel }: Props) {
         </div>
 
         <div className="space-y-3">
+          <p className="text-xs text-[var(--muted)]">
+            Você pode <strong>arrastar</strong> as perguntas pela alça ↕ para reordenar (ou usar os botões ↑/↓).
+          </p>
           {questions.map((question, index) => (
             <div
               key={question.id}
-              className="rounded-lg border border-[var(--border)] bg-white p-3 shadow-sm"
+              className={`rounded-lg border border-[var(--border)] bg-white p-3 shadow-sm ${
+                dragOverQuestionId === question.id ? "ring-2 ring-[var(--primary)]" : ""
+              }`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (draggingQuestionId && draggingQuestionId !== question.id) {
+                  setDragOverQuestionId(question.id);
+                }
+              }}
+              onDragLeave={() => {
+                setDragOverQuestionId((current) =>
+                  current === question.id ? null : current,
+                );
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const sourceId = event.dataTransfer.getData("text/plain");
+                if (sourceId) {
+                  reorderQuestion(sourceId, question.id);
+                }
+                setDraggingQuestionId(null);
+                setDragOverQuestionId(null);
+              }}
             >
               <div className="flex items-start gap-3">
-                <span className="mt-2 text-sm text-[var(--muted)]">{index + 1}.</span>
+                <div className="mt-1 flex flex-col items-center gap-1">
+                  <span className="text-sm text-[var(--muted)]">{index + 1}.</span>
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(event) => {
+                      setDraggingQuestionId(question.id);
+                      setDragOverQuestionId(null);
+                      event.dataTransfer.setData("text/plain", question.id);
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => {
+                      setDraggingQuestionId(null);
+                      setDragOverQuestionId(null);
+                    }}
+                    className={`cursor-grab select-none rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--muted)] active:cursor-grabbing ${
+                      draggingQuestionId === question.id ? "opacity-60" : ""
+                    }`}
+                    aria-label="Arrastar para reordenar"
+                    title="Arrastar para reordenar"
+                  >
+                    ↕
+                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveQuestionBy(question.id, -1)}
+                      disabled={index === 0}
+                      className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--muted)] disabled:opacity-40"
+                      aria-label="Mover para cima"
+                      title="Mover para cima"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveQuestionBy(question.id, 1)}
+                      disabled={index === questions.length - 1}
+                      className="rounded-md border border-[var(--border)] bg-white px-2 py-1 text-xs text-[var(--muted)] disabled:opacity-40"
+                      aria-label="Mover para baixo"
+                      title="Mover para baixo"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   className="w-full rounded-md border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
                   value={question.text}
