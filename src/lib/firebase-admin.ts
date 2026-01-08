@@ -7,6 +7,18 @@ type ServiceAccountConfig = {
   privateKey: string;
 };
 
+function resolveProjectId(): string | undefined {
+  // Server-side preferred env vars
+  const direct =
+    process.env.FIREBASE_PROJECT_ID ??
+    process.env.GOOGLE_CLOUD_PROJECT ??
+    process.env.GCLOUD_PROJECT ??
+    // NEXT_PUBLIC_* is not ideal for server config, but projectId is not secret,
+    // and some deployments only set the public Firebase vars.
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  return direct?.trim() || undefined;
+}
+
 function parseServiceAccount(raw: string): ServiceAccountConfig | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
@@ -55,7 +67,7 @@ function resolveCredential() {
     }
   }
 
-  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const projectId = resolveProjectId();
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
   if (projectId && clientEmail && privateKey) {
@@ -78,7 +90,17 @@ let cachedDb: import("firebase-admin/firestore").Firestore | undefined;
 
 export function getAdminDb() {
   if (cachedDb) return cachedDb;
-  const app = getApps().length ? getApp() : initializeApp({ credential: resolveCredential() });
+  const projectId = resolveProjectId();
+  if (!projectId && !process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.FIREBASE_PROJECT_ID) {
+    // When using applicationDefault() outside GCP, Google Auth often can't infer projectId.
+    // Fail fast with an actionable message instead of a generic Firestore error.
+    console.warn(
+      "Firebase projectId not set. Set FIREBASE_PROJECT_ID (recommended) or GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT."
+    );
+  }
+
+  const app =
+    getApps().length ? getApp() : initializeApp({ credential: resolveCredential(), projectId: projectId });
   cachedDb = getFirestore(app);
   return cachedDb;
 }
