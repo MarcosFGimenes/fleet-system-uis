@@ -137,9 +137,15 @@ const resolveImageFormat = (dataUrl: string) => {
   return "JPEG";
 };
 
+const buildImageProxyUrl = (url: string) => `/api/images/proxy?url=${encodeURIComponent(url)}`;
+
 const fetchImageDataUrl = async (url: string) => {
   try {
-    const response = await fetch(url);
+    if (url.startsWith("data:")) {
+      return url;
+    }
+
+    const response = await fetch(buildImageProxyUrl(url));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     return await new Promise<string>((resolve, reject) => {
