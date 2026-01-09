@@ -56,40 +56,28 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   const qrSize = 192;
   const logoBoxSize = Math.max(44, Math.min(62, Math.round(qrSize * 0.25))); // ~25% do QR (ainda seguro com nível H)
 
-  const larBadgeDataUrl = useMemo(() => {
+  const overlaySpec = useMemo(() => {
     if (!larLogoSvgDataUrl) return null;
+    const boxSize = logoBoxSize;
+    const boxX = Math.round((qrSize - boxSize) / 2);
+    const boxY = Math.round((qrSize - boxSize) / 2);
+    const padding = Math.max(5, Math.round(boxSize * 0.14));
+    const imageSize = Math.max(1, boxSize - padding * 2);
+    const imageX = boxX + Math.round((boxSize - imageSize) / 2);
+    const imageY = boxY + Math.round((boxSize - imageSize) / 2);
+    const rx = Math.max(6, Math.round(boxSize * 0.18));
 
-    // Logo com contorno branco (outline).
-    // O filtro "outline" cria uma dilatação branca sólida ao redor do logo para bloquear o QR code.
-    // Usamos um threshold no alpha para evitar contornos suaves que pareçam sujos sobre o preto.
-    const innerSize = 80;
-    const innerOffset = (100 - innerSize) / 2;
-    const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-  <defs>
-    <filter id="outline" x="-50%" y="-50%" width="200%" height="200%">
-      <!-- 1. Limpa ruído do alpha e binariza para garantir borda dura -->
-      <feComponentTransfer in="SourceAlpha" result="HARD_ALPHA">
-        <feFuncA type="linear" slope="100" intercept="0"/>
-      </feComponentTransfer>
-      <!-- 2. Dilata a forma sólida (raio 1.5 ~= 2-3px visuais) -->
-      <feMorphology in="HARD_ALPHA" result="DILATED" operator="dilate" radius="1.5"/>
-      <!-- 3. Cria o flood branco -->
-      <feFlood flood-color="white" flood-opacity="1" result="WHITE"/>
-      <!-- 4. Recorta o flood usando a forma dilatada -->
-      <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE"/>
-      <!-- 5. Compõe: Outline Branco embaixo, Logo Original em cima -->
-      <feMerge>
-        <feMergeNode in="OUTLINE"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-  </defs>
-  <image filter="url(#outline)" href="${escapeXml(larLogoSvgDataUrl)}" x="${innerOffset}" y="${innerOffset}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet"/>
-</svg>`;
-
-    return svgTextToBase64DataUrl(badgeSvg);
-  }, [larLogoSvgDataUrl]);
+    return {
+      boxX,
+      boxY,
+      boxSize,
+      imageX,
+      imageY,
+      imageSize,
+      rx,
+      href: larLogoSvgDataUrl,
+    };
+  }, [larLogoSvgDataUrl, logoBoxSize, qrSize]);
 
   const handleDownload = () => {
     const svg = document.getElementById(svgId) as SVGSVGElement | null;
@@ -147,6 +135,25 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
       })
       .join("");
 
+    const overlaySvg =
+      larLogoSvgDataUrl && qrWidth > 0 && qrHeight > 0
+        ? (() => {
+            const boxSize = Math.max(44, Math.min(62, Math.round(qrWidth * 0.25)));
+            const boxX = Math.round((qrWidth - boxSize) / 2);
+            const boxY = Math.round((qrHeight - boxSize) / 2);
+            const overlayPadding = Math.max(5, Math.round(boxSize * 0.14));
+            const imageSize = Math.max(1, boxSize - overlayPadding * 2);
+            const imageX = boxX + Math.round((boxSize - imageSize) / 2);
+            const imageY = boxY + Math.round((boxSize - imageSize) / 2);
+            const rx = Math.max(6, Math.round(boxSize * 0.18));
+            return `
+  <svg x="${padding}" y="${padding}" width="${qrWidth}" height="${qrHeight}" viewBox="0 0 ${qrWidth} ${qrHeight}" aria-hidden="true">
+    <rect x="${boxX}" y="${boxY}" width="${boxSize}" height="${boxSize}" rx="${rx}" fill="#ffffff" />
+    <image href="${escapeXml(larLogoSvgDataUrl)}" x="${imageX}" y="${imageY}" width="${imageSize}" height="${imageSize}" preserveAspectRatio="xMidYMid meet" />
+  </svg>`;
+          })()
+        : "";
+
     const stickerSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg
   xmlns="http://www.w3.org/2000/svg"
@@ -158,6 +165,7 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   <svg x="${padding}" y="${padding}" width="${qrWidth}" height="${qrHeight}">
     ${qrSvgString}
   </svg>
+  ${overlaySvg}
   ${textElements}
 </svg>`;
 
@@ -176,26 +184,44 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="rounded-md border border-[var(--border)] bg-white p-4 shadow-sm">
-        <QRCodeSVG
-          id={svgId}
-          value={value}
-          size={qrSize}
-          includeMargin
-          marginSize={2}
-          level="H"
-          bgColor="#ffffff"
-          fgColor="#0b0f19"
-          imageSettings={
-            larBadgeDataUrl
-              ? {
-                  src: larBadgeDataUrl,
-                  height: logoBoxSize,
-                  width: logoBoxSize,
-                  excavate: false,
-                }
-              : undefined
-          }
-        />
+        <div className="relative inline-block">
+          <QRCodeSVG
+            id={svgId}
+            value={value}
+            size={qrSize}
+            includeMargin
+            marginSize={2}
+            level="H"
+            bgColor="#ffffff"
+            fgColor="#0b0f19"
+          />
+          {overlaySpec && (
+            <svg
+              className="pointer-events-none absolute inset-0"
+              width={qrSize}
+              height={qrSize}
+              viewBox={`0 0 ${qrSize} ${qrSize}`}
+              aria-hidden="true"
+            >
+              <rect
+                x={overlaySpec.boxX}
+                y={overlaySpec.boxY}
+                width={overlaySpec.boxSize}
+                height={overlaySpec.boxSize}
+                rx={overlaySpec.rx}
+                fill="#ffffff"
+              />
+              <image
+                href={overlaySpec.href}
+                x={overlaySpec.imageX}
+                y={overlaySpec.imageY}
+                width={overlaySpec.imageSize}
+                height={overlaySpec.imageSize}
+                preserveAspectRatio="xMidYMid meet"
+              />
+            </svg>
+          )}
+        </div>
       </div>
       {captionLines.filter(Boolean).length > 0 && (
         <div className="text-center">
