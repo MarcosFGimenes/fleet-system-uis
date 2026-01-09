@@ -60,17 +60,25 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     if (!larLogoSvgDataUrl) return null;
 
     // Logo com contorno branco (outline).
-    // O filtro "outline" cria uma dilatação branca baseada no canal Alpha do logo.
-    // Reduzimos o raio para 1.2 para evitar que detalhes internos (buracos das letras) sejam fechados.
+    // O filtro "outline" cria uma dilatação branca sólida ao redor do logo para bloquear o QR code.
+    // Usamos um threshold no alpha para evitar contornos suaves que pareçam sujos sobre o preto.
     const innerSize = 80;
     const innerOffset = (100 - innerSize) / 2;
     const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
   <defs>
-    <filter id="outline" x="-20%" y="-20%" width="140%" height="140%">
-      <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="1.2"/>
+    <filter id="outline" x="-50%" y="-50%" width="200%" height="200%">
+      <!-- 1. Limpa ruído do alpha e binariza para garantir borda dura -->
+      <feComponentTransfer in="SourceAlpha" result="HARD_ALPHA">
+        <feFuncA type="linear" slope="100" intercept="0"/>
+      </feComponentTransfer>
+      <!-- 2. Dilata a forma sólida (raio 1.5 ~= 2-3px visuais) -->
+      <feMorphology in="HARD_ALPHA" result="DILATED" operator="dilate" radius="1.5"/>
+      <!-- 3. Cria o flood branco -->
       <feFlood flood-color="white" flood-opacity="1" result="WHITE"/>
+      <!-- 4. Recorta o flood usando a forma dilatada -->
       <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE"/>
+      <!-- 5. Compõe: Outline Branco embaixo, Logo Original em cima -->
       <feMerge>
         <feMergeNode in="OUTLINE"/>
         <feMergeNode in="SourceGraphic"/>
