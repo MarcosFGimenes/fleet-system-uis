@@ -131,8 +131,10 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
             const imageSize = Math.round(qrWidth * 0.32); // ~32% do QR
             const imageX = Math.round((qrWidth - imageSize) / 2);
             const imageY = Math.round((qrHeight - imageSize) / 2);
+            const borderPadding = 8; // Tamanho da borda branca
             return `
   <svg x="${padding}" y="${padding}" width="${qrWidth}" height="${qrHeight}" viewBox="0 0 ${qrWidth} ${qrHeight}" aria-hidden="true">
+    <rect x="${imageX - borderPadding}" y="${imageY - borderPadding}" width="${imageSize + borderPadding * 2}" height="${imageSize + borderPadding * 2}" fill="#ffffff" rx="4" ry="4" />
     <image href="${escapeXml(larLogoSvgDataUrl)}" x="${imageX}" y="${imageY}" width="${imageSize}" height="${imageSize}" preserveAspectRatio="xMidYMid meet" />
   </svg>`;
           })()
@@ -187,6 +189,16 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
               viewBox={`0 0 ${qrSize} ${qrSize}`}
               aria-hidden="true"
             >
+              {/* Borda branca ao redor do logo */}
+              <rect
+                x={overlaySpec.imageX - 8}
+                y={overlaySpec.imageY - 8}
+                width={overlaySpec.imageSize + 16}
+                height={overlaySpec.imageSize + 16}
+                fill="#ffffff"
+                rx={4}
+                ry={4}
+              />
               <image
                 href={overlaySpec.href}
                 x={overlaySpec.imageX}
