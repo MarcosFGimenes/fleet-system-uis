@@ -60,15 +60,15 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     if (!larLogoSvgDataUrl) return null;
 
     // Logo com contorno branco (outline).
-    // Usamos filtro SVG para dilatar a opacidade da imagem e criar uma borda branca.
-    // Com excavate: false, essa borda cobre os módulos do QR code atrás do logo.
-    const innerSize = 80; // Aumentamos um pouco já que não tem moldura
+    // O filtro "outline" cria uma dilatação branca baseada no canal Alpha do logo.
+    // Reduzimos o raio para 1.2 para evitar que detalhes internos (buracos das letras) sejam fechados.
+    const innerSize = 80;
     const innerOffset = (100 - innerSize) / 2;
     const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
   <defs>
-    <filter id="outline">
-      <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="3"/>
+    <filter id="outline" x="-20%" y="-20%" width="140%" height="140%">
+      <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="1.2"/>
       <feFlood flood-color="white" flood-opacity="1" result="WHITE"/>
       <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE"/>
       <feMerge>
