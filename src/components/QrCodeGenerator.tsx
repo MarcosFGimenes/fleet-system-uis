@@ -148,7 +148,6 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
             const rx = Math.max(6, Math.round(boxSize * 0.18));
             return `
   <svg x="${padding}" y="${padding}" width="${qrWidth}" height="${qrHeight}" viewBox="0 0 ${qrWidth} ${qrHeight}" aria-hidden="true">
-    <rect x="${boxX}" y="${boxY}" width="${boxSize}" height="${boxSize}" rx="${rx}" fill="#ffffff" />
     <image href="${escapeXml(larLogoSvgDataUrl)}" x="${imageX}" y="${imageY}" width="${imageSize}" height="${imageSize}" preserveAspectRatio="xMidYMid meet" />
   </svg>`;
           })()
@@ -203,14 +202,6 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
               viewBox={`0 0 ${qrSize} ${qrSize}`}
               aria-hidden="true"
             >
-              <rect
-                x={overlaySpec.boxX}
-                y={overlaySpec.boxY}
-                width={overlaySpec.boxSize}
-                height={overlaySpec.boxSize}
-                rx={overlaySpec.rx}
-                fill="#ffffff"
-              />
               <image
                 href={overlaySpec.href}
                 x={overlaySpec.imageX}
