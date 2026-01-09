@@ -54,30 +54,20 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   }, []);
 
   const qrSize = 192;
-  const logoBoxSize = Math.max(44, Math.min(62, Math.round(qrSize * 0.25))); // ~25% do QR (ainda seguro com nível H)
+  const logoSize = Math.round(qrSize * 0.32); // ~32% do QR (seguro com nível H)
 
   const overlaySpec = useMemo(() => {
     if (!larLogoSvgDataUrl) return null;
-    const boxSize = logoBoxSize;
-    const boxX = Math.round((qrSize - boxSize) / 2);
-    const boxY = Math.round((qrSize - boxSize) / 2);
-    const padding = Math.max(5, Math.round(boxSize * 0.14));
-    const imageSize = Math.max(1, boxSize - padding * 2);
-    const imageX = boxX + Math.round((boxSize - imageSize) / 2);
-    const imageY = boxY + Math.round((boxSize - imageSize) / 2);
-    const rx = Math.max(6, Math.round(boxSize * 0.18));
+    const imageX = Math.round((qrSize - logoSize) / 2);
+    const imageY = Math.round((qrSize - logoSize) / 2);
 
     return {
-      boxX,
-      boxY,
-      boxSize,
       imageX,
       imageY,
-      imageSize,
-      rx,
+      imageSize: logoSize,
       href: larLogoSvgDataUrl,
     };
-  }, [larLogoSvgDataUrl, logoBoxSize, qrSize]);
+  }, [larLogoSvgDataUrl, logoSize, qrSize]);
 
   const handleDownload = () => {
     const svg = document.getElementById(svgId) as SVGSVGElement | null;
@@ -138,14 +128,9 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
     const overlaySvg =
       larLogoSvgDataUrl && qrWidth > 0 && qrHeight > 0
         ? (() => {
-            const boxSize = Math.max(44, Math.min(62, Math.round(qrWidth * 0.25)));
-            const boxX = Math.round((qrWidth - boxSize) / 2);
-            const boxY = Math.round((qrHeight - boxSize) / 2);
-            const overlayPadding = Math.max(5, Math.round(boxSize * 0.14));
-            const imageSize = Math.max(1, boxSize - overlayPadding * 2);
-            const imageX = boxX + Math.round((boxSize - imageSize) / 2);
-            const imageY = boxY + Math.round((boxSize - imageSize) / 2);
-            const rx = Math.max(6, Math.round(boxSize * 0.18));
+            const imageSize = Math.round(qrWidth * 0.32); // ~32% do QR
+            const imageX = Math.round((qrWidth - imageSize) / 2);
+            const imageY = Math.round((qrHeight - imageSize) / 2);
             return `
   <svg x="${padding}" y="${padding}" width="${qrWidth}" height="${qrHeight}" viewBox="0 0 ${qrWidth} ${qrHeight}" aria-hidden="true">
     <image href="${escapeXml(larLogoSvgDataUrl)}" x="${imageX}" y="${imageY}" width="${imageSize}" height="${imageSize}" preserveAspectRatio="xMidYMid meet" />
