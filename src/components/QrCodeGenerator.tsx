@@ -59,16 +59,25 @@ export default function QrCodeGenerator({ value, captionLines = [], fileName = "
   const larBadgeDataUrl = useMemo(() => {
     if (!larLogoSvgDataUrl) return null;
 
-    // Badge “tipo WhatsApp Web”: fundo branco com cantos arredondados + logo central.
-    // Importante: NÃO usamos "excavate" (quadrado) para permitir cantos arredondados.
-    // A ideia é cobrir os módulos com um retângulo branco arredondado (visual de "buraco" arredondado).
-    const innerSize = 76; // logo maior (menos padding)
+    // Logo com contorno branco (outline).
+    // Usamos filtro SVG para dilatar a opacidade da imagem e criar uma borda branca.
+    // Com excavate: false, essa borda cobre os módulos do QR code atrás do logo.
+    const innerSize = 80; // Aumentamos um pouco já que não tem moldura
     const innerOffset = (100 - innerSize) / 2;
     const badgeSvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
-  <rect x="6" y="6" width="88" height="88" rx="22" fill="#ffffff"/>
-  <rect x="6" y="6" width="88" height="88" rx="22" fill="none" stroke="#e5e7eb" stroke-width="2"/>
-  <image href="${escapeXml(larLogoSvgDataUrl)}" x="${innerOffset}" y="${innerOffset}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet"/>
+  <defs>
+    <filter id="outline">
+      <feMorphology in="SourceAlpha" result="DILATED" operator="dilate" radius="3"/>
+      <feFlood flood-color="white" flood-opacity="1" result="WHITE"/>
+      <feComposite in="WHITE" in2="DILATED" operator="in" result="OUTLINE"/>
+      <feMerge>
+        <feMergeNode in="OUTLINE"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <image filter="url(#outline)" href="${escapeXml(larLogoSvgDataUrl)}" x="${innerOffset}" y="${innerOffset}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet"/>
 </svg>`;
 
     return svgTextToBase64DataUrl(badgeSvg);
