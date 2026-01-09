@@ -10,7 +10,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
   limit,
   orderBy,
   query,
@@ -390,11 +389,6 @@ export default function ChecklistByTagPage() {
 
   const [operatorSignatureDataUrl, setOperatorSignatureDataUrl] = useState<string | null>(null);
   const [driverSignatureDataUrl, setDriverSignatureDataUrl] = useState<string | null>(null);
-  const [operatorSavedSignatureDataUrl, setOperatorSavedSignatureDataUrl] =
-    useState<string | null>(null);
-  const [operatorUseSavedSignature, setOperatorUseSavedSignature] = useState(false);
-  const [operatorSignatureLoading, setOperatorSignatureLoading] = useState(false);
-  const [shouldSaveOperatorSignature, setShouldSaveOperatorSignature] = useState(false);
 
   const [answers, setAnswers] = useState<AnswerMap>({});
 
@@ -442,74 +436,6 @@ export default function ChecklistByTagPage() {
   const machinesCol = useMemo(() => collection(db, "machines"), []);
   const templatesCol = useMemo(() => collection(db, "checklistTemplates"), []);
   const responsesCol = useMemo(() => collection(db, "checklistResponses"), []);
-
-  useEffect(() => {
-    let active = true;
-
-    const resetSignatureState = () => {
-      setOperatorSavedSignatureDataUrl(null);
-      setOperatorUseSavedSignature(false);
-      setOperatorSignatureDataUrl(null);
-      setShouldSaveOperatorSignature(false);
-      setOperatorSignatureLoading(false);
-    };
-
-    if (!userInfo) {
-      resetSignatureState();
-      return () => {
-        active = false;
-      };
-    }
-
-    setOperatorSignatureLoading(true);
-
-    const loadSavedSignature = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, "users", userInfo.id));
-        if (!active) return;
-
-        if (userDoc.exists()) {
-          const data = userDoc.data() as { signatureDataUrl?: string | null };
-          const savedDataUrl =
-            typeof data.signatureDataUrl === "string" && data.signatureDataUrl.trim()
-              ? data.signatureDataUrl
-              : null;
-
-          setOperatorSavedSignatureDataUrl(savedDataUrl);
-          if (savedDataUrl) {
-            setOperatorUseSavedSignature(true);
-            setOperatorSignatureDataUrl(savedDataUrl);
-            setShouldSaveOperatorSignature(false);
-          } else {
-            setOperatorUseSavedSignature(false);
-            setOperatorSignatureDataUrl(null);
-          }
-        } else {
-          setOperatorSavedSignatureDataUrl(null);
-          setOperatorUseSavedSignature(false);
-          setOperatorSignatureDataUrl(null);
-          setShouldSaveOperatorSignature(false);
-        }
-      } catch (error) {
-        console.error("Erro ao carregar assinatura salva do operador", error);
-        if (!active) return;
-        setOperatorSavedSignatureDataUrl(null);
-        setOperatorUseSavedSignature(false);
-        setOperatorSignatureDataUrl(null);
-        setShouldSaveOperatorSignature(false);
-      } finally {
-        if (active) {
-          setOperatorSignatureLoading(false);
-        }
-      }
-    };
-
-    loadSavedSignature();
-
-    return () => {
-      active = false;
-    };
-  }, [userInfo]);
 
   useEffect(() => {
     return () => {
@@ -885,24 +811,6 @@ export default function ChecklistByTagPage() {
     setRecurrenceDecisions((prev) => ({ ...prev, [questionId]: status }));
   };
 
-  const handleOperatorSignatureModeChange = (mode: "saved" | "new") => {
-    if (mode === "saved") {
-      if (operatorSavedSignatureDataUrl) {
-        setOperatorUseSavedSignature(true);
-        setOperatorSignatureDataUrl(operatorSavedSignatureDataUrl);
-        setShouldSaveOperatorSignature(false);
-      }
-      return;
-    }
-
-    setOperatorUseSavedSignature(false);
-    setOperatorSignatureDataUrl(null);
-  };
-
-  const handleOperatorSignatureSavePreference = (shouldSave: boolean) => {
-    setShouldSaveOperatorSignature(shouldSave);
-  };
-
   /* ============================
      Validação usuário
   ============================ */
@@ -1169,29 +1077,6 @@ export default function ChecklistByTagPage() {
         }
       }
 
-      if (shouldSaveOperatorSignature && operatorSignatureDataUrl) {
-        try {
-          await setDoc(
-            doc(db, "users", userId),
-            {
-              signatureDataUrl: operatorSignatureDataUrl,
-              signatureUpdatedAt: serverTimestamp(),
-              matricula: userInfo?.matricula ?? matriculaValue,
-            },
-            { merge: true },
-          );
-          setOperatorSavedSignatureDataUrl(operatorSignatureDataUrl);
-          setOperatorUseSavedSignature(true);
-          setShouldSaveOperatorSignature(false);
-        } catch (error) {
-          console.error("Erro ao salvar assinatura do operador", error);
-          showNotification(
-            "Não foi possível salvar a assinatura para uso futuro.",
-            "warning",
-          );
-        }
-      }
-
       let driverSignatureUrl: string | null = null;
       if (driverSignatureDataUrl) {
         try {
@@ -1273,11 +1158,7 @@ export default function ChecklistByTagPage() {
 
       showNotification("Checklist enviado com sucesso!", "success");
       clearAllPreviewUrls();
-      if (operatorUseSavedSignature && operatorSavedSignatureDataUrl) {
-        setOperatorSignatureDataUrl(operatorSavedSignatureDataUrl);
-      } else {
-        setOperatorSignatureDataUrl(null);
-      }
+      setOperatorSignatureDataUrl(null);
       setDriverSignatureDataUrl(null);
       setDriverMatricula("");
       setDriverNome("");
@@ -2125,79 +2006,12 @@ export default function ChecklistByTagPage() {
         <section className="rounded-xl light-card p-4 space-y-4">
           <h2 className="font-semibold">Assinaturas</h2>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-[var(--text)]">
-                Assinatura do {primaryActorLabel.toLowerCase()}
-              </p>
-              <p className="text-xs text-[var(--hint)]">
-                Confirmar o checklist como {primaryActorLabel.toLowerCase()}.
-              </p>
-            </div>
-
-            {operatorSignatureLoading ? (
-              <p className="text-xs text-[var(--hint)]">Carregando assinatura salva...</p>
-            ) : operatorSavedSignatureDataUrl ? (
-              <div className="flex flex-wrap gap-4 text-sm text-[var(--text)]">
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="operator-signature-mode"
-                    value="saved"
-                    checked={operatorUseSavedSignature}
-                    onChange={() => handleOperatorSignatureModeChange("saved")}
-                  />
-                  Usar assinatura salva
-                </label>
-                <label className="inline-flex items-center gap-2">
-                  <input
-                    type="radio"
-                    name="operator-signature-mode"
-                    value="new"
-                    checked={!operatorUseSavedSignature}
-                    onChange={() => handleOperatorSignatureModeChange("new")}
-                  />
-                  Desenhar nova assinatura
-                </label>
-              </div>
-            ) : null}
-
-            {operatorUseSavedSignature && operatorSavedSignatureDataUrl ? (
-              <div className="rounded-md border border-[var(--border)] bg-white p-4">
-                <img
-                  src={operatorSavedSignatureDataUrl}
-                  alt={`Assinatura salva do ${primaryActorLabel.toLowerCase()}`}
-                  className="mx-auto max-h-32 w-auto"
-                />
-                <p className="mt-2 text-center text-xs text-[var(--hint)]">
-                  Matrícula vinculada: {userInfo?.matricula ?? matricula}
-                </p>
-              </div>
-            ) : (
-              <SignaturePad
-                label=""
-                required={actorConfig.requireOperatorSignature}
-                onChange={(value) => {
-                  setOperatorSignatureDataUrl(value);
-                  if (!value) {
-                    handleOperatorSignatureSavePreference(false);
-                  }
-                }}
-              />
-            )}
-
-            {!operatorUseSavedSignature && !operatorSignatureLoading && (
-              <label className="flex items-center gap-2 text-xs text-[var(--text)]">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-[var(--border)] text-[var(--primary)] focus:ring-[var(--primary)]"
-                  checked={shouldSaveOperatorSignature}
-                  onChange={(event) =>
-                    handleOperatorSignatureSavePreference(event.target.checked)
-                  }
-                />
-                Salvar assinatura para os próximos checklists.
-              </label>
-            )}
+            <SignaturePad
+              label={`Assinatura do ${primaryActorLabel.toLowerCase()}`}
+              description={`Confirmar o checklist como ${primaryActorLabel.toLowerCase()}.`}
+              required={actorConfig.requireOperatorSignature}
+              onChange={setOperatorSignatureDataUrl}
+            />
           </div>
           {(showDriverFields || actorConfig.kind === "mecanico" || actorConfig.requireMotoristSignature) && (
             <SignaturePad
